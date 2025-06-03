@@ -1,5 +1,4 @@
-name: Unit Tests
-
+name: Trivy vulnerability scanner
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
@@ -7,21 +6,16 @@ concurrency:
 on:
   push:
     branches: [main]
-    paths-ignore: ["docs/**", "**.md", "**.mdx", "**.png", "**.jpg"]
   pull_request:
     branches: [main, release-**]
-    paths-ignore: ["docs/**", "**.md", "**.mdx", "**.png", "**.jpg"]
 
 permissions:
   contents: read
 
-env:
-  GO_VERSION: "1.24.3"
-
 jobs:
-  unit-tests:
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    environment: unit-tests
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
@@ -41,15 +35,20 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+        id: go
 
-
-      - name: Run unit tests & Generate coverage
+      - name: Build driver image from Dockerfile
         run: |
-          make test
+          REGISTRY=test TAG=latest make docker-build
 
-      # - name: Upload Codecov report
-      #   uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
-      #   with:
-      #     verbose: true
-      #     files: ./coverage.txt
-      #     token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_DB_REPOSITORY: "public.ecr.aws/aquasecurity/trivy-db:2"
+        with:
+          image-ref: 'test/local-csi-driver/driver:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
