@@ -15,32 +15,14 @@ repos:
   rev: v2.1.6
   hooks:
   - id: golangci-lint-full
-- repo: local
+- repo: https://github.com/hadolint/hadolint
+  rev: v2.12.0
   hooks:
-  - id: docker-lint
-    name: Dockerfile linter
-    entry: make docker-lint
-    language: system
-    files: ^Dockerfile\..*$
-    pass_filenames: false
-  - id: bicep-lint
-    name: bicep file linter
-    entry: make bicep-lint
-    language: system
-    files: ^.*\.bicep$
-    pass_filenames: false
-  - id: markdownlint
-    name: Markdown linter
-    entry: make run-markdownlint
-    language: system
-    files: ^.*\.md$
-    pass_filenames: false
-  - id: addcopyright
-    name: Add copyright header
-    entry: make add-copyright
-    language: system
-    files: ^.*\.(go|sh|mk|py)$
-    pass_filenames: false
+    - id: hadolint-docker
+- repo: https://github.com/igorshubovych/markdownlint-cli
+  rev: v0.45.0
+  hooks:
+  - id: markdownlint-fix-docker
 - repo: https://github.com/pycqa/flake8
   rev: 7.2.0
   hooks:
@@ -51,3 +33,17 @@ repos:
   - id: codespell
     args:
     - --config=.codespellrc
+- repo: local
+  hooks:
+  - id: bicep-lint
+    name: bicep file linter
+    entry: make bicep-lint
+    language: system
+    files: ^.*\.bicep$
+    pass_filenames: false
+  - id: addcopyright
+    name: Add copyright header
+    entry: make add-copyright
+    language: system
+    files: ^.*\.(go|sh|mk|py)$
+    pass_filenames: false

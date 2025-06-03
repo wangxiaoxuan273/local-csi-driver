@@ -28,7 +28,7 @@ LDFLAGS += -X local-csi-driver/internal/pkg/version.buildDate=$(BUILD_DATE)
 ENVTEST_K8S_VERSION = 1.31.0
 
 TEST_OUTPUT ?= $(shell pwd)/test.xml
-TEST_COVER ?= $(shell pwd)/coverage.xml
+TEST_COVER ?= $(shell pwd)/coverage.out
 SUMMARY_OUTPUT ?= $(shell pwd)/summary.md
 NO_COLOR ?= false
 FOCUS ?=
@@ -103,14 +103,12 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate envtest go-junit-report gocov gocov-xml ## Run tests and generate coverage report
+test: manifests generate envtest ## Run tests and generate coverage report
 	$(eval TMP := $(shell mktemp -d))
+	$(eval TMP_COVER := $(TMP)/cover.out)
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
-		go test -race -v -p 8 $$(go list ./... | grep -v -e /test/) -coverprofile $(TMP)/cover.out 2>&1 | \
-		$(GO_JUNIT_REPORT) -set-exit-code -iocopy -out $(TEST_OUTPUT)
-	@cat $(TMP)/cover.out | grep -v -E -f .covignore > $(TMP)/cover.clean
-	@$(GOCOV) convert $(TMP)/cover.clean | $(GOCOV_XML) > $(TEST_COVER)
-	@rm $(TMP)/cover.out $(TMP)/cover.clean && rmdir $(TMP)
+		go test -race -v -p 8 $$(go list ./... | grep -v -e /test/) -coverprofile $(TMP_COVER)
+	@cat $(TMP_COVER) | grep -v -E -f .covignore > $(TEST_COVER)
 
 
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -343,7 +341,7 @@ bicep-format: bicep ## Format all Bicep templates.
 
 .PHONY: run-markdownlint
 run-markdownlint: $(NODE)
-	npm_config_registry=https://msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/registry/ npx markdownlint-cli@$(MARKDOWNLINT_CLI_VERSION) -c .markdownlint.yaml --fix .
+	npx markdownlint-cli@$(MARKDOWNLINT_CLI_VERSION) -c .markdownlint.yaml --fix .
 
 .PHONY: add-copyright
 add-copyright:
@@ -417,10 +415,7 @@ MOCK_GEN ?= $(LOCALBIN)/mockgen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 KIND ?= $(LOCALBIN)/kind
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
-GO_JUNIT_REPORT ?= $(LOCALBIN)/go-junit-report
 GINKGO ?= $(LOCALBIN)/ginkgo
-GOCOV ?= $(LOCALBIN)/gocov
-GOCOV_XML ?= $(LOCALBIN)/gocov-xml
 HADOLINT ?= $(LOCALBIN)/hadolint
 CONTAINER_STRUCTURE_TEST ?= $(LOCALBIN)/container-structure-test
 SUPPORT_BUNDLE ?= $(LOCALBIN)/support-bundle
@@ -440,8 +435,6 @@ CERT_MANAGER_VERSION ?= 1.12.12-5
 PROMETHEUS_VERSION ?= v0.77.1
 JAEGER_VERSION ?= v1.62.0
 GINKGO_VERSION ?= v2.22.2
-GOCOV_VERSION ?= v1.2.1
-GOCOV_XML_VERSION ?= v1.1.0
 HADOLINT_VERSION ?= v2.12.0
 CONTAINER_STRUCTURE_TEST_VERSION ?= v1.19.3
 GIT_SEMVER_VERSION ?= v6.9.0
@@ -480,21 +473,6 @@ $(KIND): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
-
-.PHONY: go-junit-report
-go-junit-report: $(GO_JUNIT_REPORT) ## Download go-junit-report locally if necessary.
-$(GO_JUNIT_REPORT): $(LOCALBIN)
-	$(call go-install-tool,$(GO_JUNIT_REPORT),github.com/jstemmer/go-junit-report/v2,$(GO_JUNIT_REPORT_VERSION))
-
-.PHONY: gocov
-gocov: $(GOCOV) ## Download gocov locally if necessary.
-$(GOCOV): $(LOCALBIN)
-	$(call go-install-tool,$(GOCOV),github.com/axw/gocov/gocov,$(GOCOV_VERSION))
-
-.PHONY: gocov-xml
-gocov-xml: $(GOCOV_XML) ## Download gocov-xml locally if necessary.
-$(GOCOV_XML): $(LOCALBIN)
-	$(call go-install-tool,$(GOCOV_XML),github.com/AlekSi/gocov-xml,$(GOCOV_XML_VERSION))
 
 .PHONY: helmify
 helmify: $(HELMIFY) ## Download helmify locally if necessary.
