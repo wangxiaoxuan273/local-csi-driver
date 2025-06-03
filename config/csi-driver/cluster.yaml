@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: system
+  labels:
+    local.csi.azure.com/config: cluster
+data:
+  config.yaml: |
+    apiVersion: local.storage.azure.com/v1alpha1
+    kind: ClusterConfig
+    enforceEphemeralPVC: true
+    enforceHyperconvergedWithWebhook: true

@@ -1,0 +1,16 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-annotations-to-pvcs
+spec:
+  rules:
+  - name: add-csi-annotations
+    match:
+      resources:
+        kinds:
+        - PersistentVolumeClaim
+    mutate:
+      patchStrategicMerge:
+        metadata:
+          annotations:
+            +(local.csi.azure.com/accept-ephemeral-storage): "true"

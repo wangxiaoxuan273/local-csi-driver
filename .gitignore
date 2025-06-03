@@ -1,0 +1,47 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/*
+Dockerfile.cross
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Output of unit test and go-junit-report
+report.xml
+JUnit.xml
+
+# Go workspace file
+go.work
+
+# Kubernetes Generated files - skip generated files, except for vendored files
+!vendor/**/zz_generated.*
+
+# editor and IDE paraphernalia
+# Explicitly allowing .vscode for shared project settings.
+.idea
+*.swp
+*.swo
+*~
+sanity.xml
+test.xml
+external-e2e.xml
+coverage.xml
+coverage-*.xml
+JUnit-*.xml
+
+# ignore vendor directory
+**/vendor/**
+support-bundles/**
+support-bundles-*/**
+
+# ignore dist directory
+dist/**
+summary.md
+config/controller/generated_config.yaml

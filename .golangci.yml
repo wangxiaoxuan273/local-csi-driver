@@ -1,0 +1,63 @@
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - dupl
+    - errcheck
+    - ginkgolinter
+    - goconst
+    - gocyclo
+    - godot
+    - govet
+    - importas
+    - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    importas:
+      alias:
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+          alias: metav1
+        - pkg: k8s.io/component-base/tracing/api/v1
+          alias: tracingv1
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: imports-blocklist
+          arguments:
+            - crypto/md5
+            - crypto/sha1
+            - github.com/stretchr/testify/**
+            - github.com/golang/mock/**
+    staticcheck:
+     dot-import-whitelist:
+        - github.com/onsi/ginkgo/v2
+        - github.com/onsi/gomega
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - dupl
+        path: internal/*
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - local-csi-driver/
+  exclusions:
+    generated: lax

@@ -1,0 +1,7 @@
+resources:
+- service.yaml
+- pvc
+- hyperconverged
+
+configurations:
+- kustomizeconfig.yaml

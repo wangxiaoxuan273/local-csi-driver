@@ -1,0 +1,38 @@
+# This patch will add a socat container to the pod that listens on TCP port 10000 and forwards the traffic to the CSI
+# socket. This is useful for debugging the CSI driver using the csi-sanity tool.
+# Example: kubectl patch deployments.apps -n cns-system cns-cluster-manager --patch-file ./test/sanity/fixtures/agent-patch.yaml
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: init-socat
+        image: mcr.microsoft.com/azurelinux/base/core:3.0
+        command:
+          - /bin/sh
+          - -c
+          - |
+            tdnf install -y --releasever 3.0 --installroot /shared \
+              socat \
+              && tdnf clean all \
+              && rm -rf /staging/run /staging/var/log /staging/var/cache/tdnf
+        volumeMounts:
+        - mountPath: /shared
+          name: shared-dir
+      containers:
+      - name: socat-lvm
+        image: mcr.microsoft.com/azurelinux/base/core:3.0
+        command:
+          - /shared/usr/bin/socat
+        args:
+          - tcp-listen:10000,fork,reuseaddr
+          - unix-connect:/csi/lvm.sock
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /csi
+          name: csi-socket-dir
+        - mountPath: /shared
+          name: shared-dir
+      volumes:
+      - name: shared-dir
+        emptyDir: {}

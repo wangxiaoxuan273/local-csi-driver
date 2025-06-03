@@ -1,0 +1,406 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+package lvm
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	"local-csi-driver/internal/csi/capability"
+	"local-csi-driver/internal/csi/core"
+	"local-csi-driver/internal/pkg/convert"
+	"local-csi-driver/internal/pkg/events"
+	"local-csi-driver/internal/pkg/lvm"
+)
+
+const (
+	// Logical Volume (LV) related event reasons.
+	deletingLogicalVolume       = "DeletingLogicalVolume"
+	deletedLogicalVolume        = "DeletedLogicalVolume"
+	deletingLogicalVolumeFailed = "DeletingLogicalVolumeFailed"
+)
+
+// GetControllerDriverCapabilities returns the controller service.
+func (l *LVM) GetControllerDriverCapabilities() []*csi.ControllerServiceCapability {
+	caps := make([]*csi.ControllerServiceCapability, 0, len(controllerCapabilities))
+	for _, cap := range controllerCapabilities {
+		caps = append(caps, capability.NewControllerServiceCapability(cap))
+	}
+	return caps
+}
+
+// Create implements the csi.ControllerServer interface.
+// It provisions and returns a new logical volume with lvm.
+func (l *LVM) Create(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.Volume, error) {
+	ctx, span := l.tracer.Start(ctx, "volume.lvm.csi/Create", trace.WithAttributes(
+		attribute.String("vol.name", req.Name),
+	))
+	defer span.End()
+
+	log := log.FromContext(ctx)
+	log.V(1).Info("creating volume")
+
+	// Validate request parameters.
+	params := req.GetParameters()
+	if params == nil {
+		params = make(map[string]string)
+	}
+
+	if params[VolumeGroupNameParam] == "" {
+		params[VolumeGroupNameParam] = DefaultVolumeGroup
+	}
+	span.SetAttributes(attribute.String("vol.group", params[VolumeGroupNameParam]))
+
+	// TODO(sc): do we care about aligning on MiB? LVM will automatically expand
+	// to align on 4MiB boundaries to match physical extents.
+	capacityBytes := req.GetCapacityRange().GetRequiredBytes()
+	if capacityBytes == 0 {
+		log.Info("invalid volume size, resize to 1G")
+		capacityBytes = 1024 * 1024 * 1024
+	}
+	sizeMiB := convert.RoundUpMiB(capacityBytes)
+	span.SetAttributes(attribute.Int64("capacity.bytes", capacityBytes))
+	span.SetAttributes(attribute.Int64("capacity.mib", sizeMiB))
+
+	maxSizeMiB := convert.RoundUpMiB(req.GetCapacityRange().GetLimitBytes())
+	if maxSizeMiB > 0 && sizeMiB > maxSizeMiB {
+		return nil, fmt.Errorf("after round-up to MiB, requested size %dMiB exceeds limit %dMiB", sizeMiB, maxSizeMiB)
+	}
+	params[SizeMiBKey] = fmt.Sprintf("%dMi", sizeMiB)
+
+	id, err := newVolumeId(params[VolumeGroupNameParam], req.Name)
+	if err != nil {
+		log.Error(err, "failed to create volume id", "name", req.Name)
+		span.SetStatus(codes.Error, "failed to create volume id")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to create volume id: %w", err)
+	}
+
+	// Check for existing volume on the node.
+	if err := l.EnsureVolume(ctx, id.String(), params); err != nil {
+		log.Error(err, "failed to ensure volume", "name", id.String())
+		span.SetStatus(codes.Error, "failed to ensure volume")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to ensure volume: %w", err)
+	}
+
+	capacityRequest := resource.MustParse(params[SizeMiBKey])
+
+	return &csi.Volume{
+		CapacityBytes: capacityRequest.Value(),
+		VolumeId:      id.String(),
+		VolumeContext: params,
+		ContentSource: req.GetVolumeContentSource(),
+		AccessibleTopology: []*csi.Topology{
+			{
+				Segments: map[string]string{
+					TopologyKey: l.nodeName,
+				},
+			},
+		},
+	}, nil
+}
+
+// func (i *Internal) Get(ctx context.Context, name string) (*csi.Volume, error) {
+// 	vol, err := i.client.IntV1alpha1().Volumes(namespace).Get(ctx, name, metav1.GetOptions{})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &csi.Volume{
+// 		VolumeId:      vol.Name,
+// 		CapacityBytes: vol.Spec.Capacity.Storage().Value(),
+// 		VolumeContext: vol.Spec.Parameters,
+// 	}, nil
+// }
+
+// Delete implements the csi.ControllerServer interface.
+// It deletes the lvm logical volume from the node.
+func (l *LVM) Delete(ctx context.Context, req *csi.DeleteVolumeRequest) error {
+	ctx, span := l.tracer.Start(ctx, "volume.lvm.csi/Delete")
+	defer span.End()
+
+	recorder := events.FromContext(ctx)
+
+	id, err := newIdFromString(req.GetVolumeId())
+	if err != nil {
+		// DeleteVolume calls for this Delete to return OK if the volume
+		// doesn't exist, so we ignore the error. By definition, the
+		// volume doesn't exist if we can't parse the ID.
+		return nil
+	}
+
+	// The volume name includes both the volume group and logical volume name.
+	volumeId := fmt.Sprintf("%s/%s", id.VolumeGroup, id.LogicalVolume)
+	span.SetAttributes(
+		attribute.String("vol.id", volumeId),
+		attribute.String("vol.group", id.VolumeGroup),
+		attribute.String("vol.name", id.LogicalVolume),
+	)
+
+	// Cleanup the volume on the node.
+	deleteOps := lvm.RemoveLVOptions{Name: volumeId}
+
+	ctx, cancel := context.WithTimeout(ctx, removeVolumeRetryTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(removeVolumeRetryPoll)
+	defer ticker.Stop()
+
+	recorder.Eventf(corev1.EventTypeNormal, deletingLogicalVolume, "Starting deletion of logical volume %s", volumeId)
+	var lastErr error
+	for {
+		select {
+		case <-ctx.Done():
+			err := errors.Join(lastErr, ctx.Err())
+			recorder.Eventf(corev1.EventTypeWarning, deletingLogicalVolumeFailed, "Failed to delete logical volume %s: %s", volumeId, err.Error())
+			span.SetStatus(codes.Error, "failed to delete logical volume")
+			span.RecordError(err)
+			return fmt.Errorf("failed to remove logical volume %s: %w", volumeId, err)
+		case <-ticker.C:
+			err := l.lvm.RemoveLogicalVolume(ctx, deleteOps)
+			if lvm.IgnoreNotFound(err) == nil {
+				recorder.Eventf(corev1.EventTypeNormal, deletedLogicalVolume, "Successfully deleted logical volume %s", volumeId)
+				span.AddEvent("deleted logical volume")
+				span.SetStatus(codes.Ok, "deleted logical volume")
+				return nil
+			}
+			if !errors.Is(err, lvm.ErrInUse) {
+				recorder.Eventf(corev1.EventTypeWarning, deletingLogicalVolumeFailed, "Failed to delete logical volume %s: %s", volumeId, err.Error())
+				span.AddEvent("failed to delete logical volume", trace.WithAttributes(
+					attribute.String("error", err.Error()),
+				))
+				return err
+			}
+			span.AddEvent("failed to delete logical volume, retrying", trace.WithAttributes(
+				attribute.String("error", err.Error()),
+			))
+			lastErr = err
+		}
+	}
+}
+
+func (l *LVM) List(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	_, span := l.tracer.Start(ctx, "volume.lvm.csi/List")
+	defer span.End()
+
+	// TODO(sc): list volumes.
+
+	// vols := &lvmv1alpha1.VolumeList{}
+	// if err := l.client.List(ctx, vols, &client.ListOptions{}); err != nil {
+	// 	span.SetStatus(codes.Error, "List failed")
+	// 	span.RecordError(err)
+	// 	return nil, err
+	// }
+
+	// entries := make([]*csi.ListVolumesResponse_Entry, 0, len(vols.Items))
+	// for _, vol := range vols.Items {
+	// 	capacity := vol.Spec.Capacity[corev1.ResourceStorage]
+	// 	entries = append(entries, &csi.ListVolumesResponse_Entry{
+	// 		Volume: &csi.Volume{
+	// 			VolumeId:      vol.GetName(),
+	// 			CapacityBytes: capacity.Value(),
+	// 			VolumeContext: vol.Spec.Parameters,
+	// 		},
+	// 	})
+	// }
+
+	return &csi.ListVolumesResponse{
+		// Entries: entries,
+	}, nil
+}
+
+// GetCapacity implements the csi.ControllerServer interface.
+// It returns the available capacity for the lvm volume group.
+func (l *LVM) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+	ctx, span := l.tracer.Start(ctx, "volume.lvm.csi/GetCapacity")
+	defer span.End()
+
+	params := req.GetParameters()
+	if params == nil {
+		params = make(map[string]string)
+	}
+	if params[VolumeGroupNameParam] == "" {
+		params[VolumeGroupNameParam] = DefaultVolumeGroup
+	}
+	span.SetAttributes(attribute.String("vol.group", params[VolumeGroupNameParam]))
+
+	for k, v := range params {
+		span.SetAttributes(attribute.String(k, v))
+	}
+
+	accessibleTopology := req.GetAccessibleTopology()
+	if accessibleTopology == nil {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: 0,
+		}, nil
+	}
+	if len(accessibleTopology.GetSegments()) == 0 {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: 0,
+		}, nil
+	}
+	node := req.GetAccessibleTopology().GetSegments()[TopologyKey]
+	if node == "" {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: 0,
+		}, nil
+	}
+
+	// Fetch the available capacity for the volume group, or the matching disks
+	// if not created yet.
+	availableCapacity, err := l.AvailableCapacity(ctx, params[VolumeGroupNameParam])
+	if err != nil {
+		return nil, err
+	}
+
+	return &csi.GetCapacityResponse{
+		AvailableCapacity: availableCapacity,
+		MaximumVolumeSize: wrapperspb.Int64(availableCapacity),
+	}, nil
+}
+
+// TODO(sc): use a cache.
+func (l *LVM) AvailableCapacity(ctx context.Context, vgName string) (int64, error) {
+	log := log.FromContext(ctx)
+	ctx, span := l.tracer.Start(ctx, "volume.lvm.csi/AvailableCapacity", trace.WithAttributes(
+		attribute.String("vol.group", vgName),
+	))
+	defer span.End()
+
+	// If the volume group exists, use its size directly.
+	vg, err := l.lvm.GetVolumeGroup(ctx, vgName)
+	if lvm.IgnoreNotFound(err) != nil {
+		span.SetStatus(codes.Error, "failed to get volume group")
+		span.RecordError(err)
+		return 0, fmt.Errorf("failed to get volume group: %w", err)
+	}
+	if vg != nil {
+		span.AddEvent("volume group exists", trace.WithAttributes(
+			attribute.Int64("vg.size", int64(vg.Size)),
+			attribute.Int64("vg.free", int64(vg.Free)),
+		))
+		return int64(vg.Free), nil
+	}
+
+	// Otherwise, the volume group hasn't been created yet, so we can return the
+	// total size of all disks matching the device filter.
+	devices, err := l.probe.ScanDevices(ctx, log)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to scan devices")
+		span.RecordError(err)
+		return 0, fmt.Errorf("failed to scan devices: %w", err)
+	}
+	span.SetAttributes(attribute.StringSlice("devices", devices))
+
+	// Get list of disks matching our filter.
+	existing := map[string]struct{}{}
+	pvs, err := l.lvm.ListPhysicalVolumes(ctx, nil)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to list physical volumes")
+		span.RecordError(err)
+		return 0, fmt.Errorf("failed to list physical volumes: %w", err)
+	}
+	for _, pv := range pvs {
+		existing[pv.Name] = struct{}{}
+	}
+
+	// Get the full list of devices, which includes the size.
+	all, err := l.probe.GetDevices(ctx)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to get all devices")
+		span.RecordError(err)
+		return 0, fmt.Errorf("failed to get all devices: %w", err)
+	}
+
+	// Calculate the available capacity from unallocated disks.
+	var availableCapacity int64
+	for _, device := range devices {
+		if _, ok := existing[device]; ok {
+			log.V(2).Info("physical volume already allocated to a volume group", "device", device)
+			continue
+		}
+
+		// Get the size of the device.
+		for _, d := range all.Devices {
+			if d.Path == device {
+				availableCapacity += d.Size
+				span.AddEvent("device size", trace.WithAttributes(
+					attribute.String("device", device),
+					attribute.Int64("size", d.Size),
+				))
+				continue
+			}
+		}
+	}
+
+	span.AddEvent("available disk capacity", trace.WithAttributes(
+		attribute.Int64("disks.size", availableCapacity),
+	))
+	return availableCapacity, nil
+}
+
+// ValidateCapabilities the volume capabilities specifically for LVM volumes.
+// This doesn't do much now but check if the volume exists.
+func (l *LVM) ValidateCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+	ctx, span := l.tracer.Start(ctx, "volume.lvm.csi/Validate", trace.WithAttributes(
+		attribute.String("vol.name", req.GetVolumeId()),
+	))
+	defer span.End()
+
+	log := log.FromContext(ctx)
+	log.V(1).Info("validating volume")
+
+	params := req.GetParameters()
+	if params == nil {
+		params = make(map[string]string)
+	}
+
+	id, err := newIdFromString(req.GetVolumeId())
+	if err != nil {
+		log.Error(err, "failed to parse volume id", "name", req.GetVolumeId())
+		span.SetStatus(codes.Error, "failed to parse volume id")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to parse volume id %s: %w", req.GetVolumeId(), err)
+	}
+
+	// params is optional and can be empty. We don't want to default to some
+	// group because VG will be present in the volume id. If the volume group
+	// name is set, check if it matches the volume id.
+	if _, ok := params[VolumeGroupNameParam]; ok {
+		if id.VolumeGroup != params[VolumeGroupNameParam] {
+			log.Error(err, "volume group name does not match", "name", req.GetVolumeId())
+			span.SetStatus(codes.Error, "volume group name does not match")
+			span.RecordError(err)
+			return nil, fmt.Errorf("volume group name %s does not match volume id %s", params[VolumeGroupNameParam], req.GetVolumeId())
+		}
+	}
+
+	span.SetAttributes(attribute.String("vol.group", id.VolumeGroup))
+
+	if _, err := l.lvm.GetLogicalVolume(ctx, id.VolumeGroup, id.LogicalVolume); err != nil {
+		if errors.Is(err, lvm.ErrNotFound) {
+			return nil, core.ErrVolumeNotFound
+		}
+		return nil, err
+	}
+	return &csi.ValidateVolumeCapabilitiesResponse{
+		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
+			VolumeContext:      req.GetVolumeContext(),
+			VolumeCapabilities: req.GetVolumeCapabilities(),
+			Parameters:         req.GetParameters(),
+			MutableParameters:  req.GetMutableParameters(),
+		},
+	}, nil
+}

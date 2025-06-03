@@ -1,0 +1,55 @@
+global:
+  image:
+    registry: mcr.microsoft.com
+config:
+  preserve: false # skip cleanup jobs that tries to run bash in kubectl image
+admissionController:
+  initContainer:
+    image:
+      registry: mcr.microsoft.com
+      repository: oss/v2/kyverno/kyvernopre
+      tag: v1.13.4@sha256:ba052b266e508145801f6bf732ca55d4a043921276ba293951a00114ee4ea0e9
+  container:
+    image:
+      registry: mcr.microsoft.com
+      repository: oss/v2/kyverno/kyverno
+      tag: v1.13.4@sha256:5e621b848b36bbb8a65341f3865780eb2b01bf5a5d6702b2482f73e379baaed6
+backgroundController:
+  image:
+    registry: mcr.microsoft.com
+    repository: oss/v2/kyverno/background-controller
+    tag: v1.13.4@sha256:d600d6fae3484433af806125d8bcc3dd47a07ed100e904ee8dc2f1d5ef0a9243
+cleanupController:
+  image:
+    registry: mcr.microsoft.com
+    repository: oss/v2/kyverno/cleanup-controller
+    tag: v1.13.4@sha256:554aa0491a7d2b2df306d2c38f1b2fcb6260fc2e0bb3d6cf9ff21123eeac24ad
+reportsController:
+  image:
+    registry: mcr.microsoft.com
+    repository: oss/v2/kyverno/reports-controller
+    tag: v1.13.4@sha256:266086d07030d05d8c508735a9cb2a33520aa01bee28885ee0d7d2f250bdcdcb
+crds:
+  migration:
+    enabled: false
+    image:
+      registry: mcr.microsoft.com
+      repository: oss/v2/kyverno/kyverno-cli
+      tag: v1.13.4@sha256:454595fb13c0b06c8eeb50a25afaedca5d4cca395058b56de9fcb9be97b388d9
+webhooksCleanup:
+  enabled: false # NOTE: mcr kubectl image is missing required bash,awk,xargs
+  image:
+    registry: mcr.microsoft.com
+    repository: oss/v2/kubernetes/kubectl
+    tag: v1.31.7@sha256:f206df4723cfa5460e3a02ec2485b1e68184671254f51acc035bb95b3d306c17
+policyReportsCleanup:
+  enabled: false # NOTE: mcr kubectl image is missing required bash,awk,xargs
+  image:
+    registry: mcr.microsoft.com
+    repository: oss/v2/kubernetes/kubectl
+    tag: v1.31.7@sha256:f206df4723cfa5460e3a02ec2485b1e68184671254f51acc035bb95b3d306c17
+test:
+  image:
+    registry: mcr.microsoft.com
+    repository: azurelinux/busybox
+    tag: 1.36@sha256:9ef74510d654dd604d8d2e7759f9eb926da41b7a35a4785632dd15a8b25d3820

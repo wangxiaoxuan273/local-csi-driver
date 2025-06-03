@@ -1,0 +1,279 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node
+  namespace: system
+  labels:
+    control-plane: local-csi-driver
+    app.kubernetes.io/name: csi-local
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      control-plane: local-csi-driver
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  minReadySeconds: 10
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: driver
+      labels:
+        control-plane: local-csi-driver
+    spec:
+      tolerations:
+       - effect: NoSchedule
+         operator: Exists
+       - effect: NoExecute
+         operator: Exists
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
+                - key: kubernetes.io/os
+                  operator: In
+                  values:
+                    - linux
+      hostPID: true
+      securityContext:
+        # Projects are configured by default to adhere to the "restricted" Pod Security Standards.
+        # This ensures that deployments meet the highest security requirements for Kubernetes.
+        # For more details, see: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
+        # runAsNonRoot: true
+        seccompProfile:
+          type: Unconfined
+      priorityClassName: system-node-critical
+      containers:
+      - name: driver
+        command:
+        - /local-csi-driver
+        args:
+          - --nodeName=$(NODE_NAME)
+          - --podName=$(POD_NAME)
+          - --namespace=$(POD_NAMESPACE)
+          - --config=/etc/cluster-config.yaml
+          - --csi-bind-address=unix:///csi/lvm.sock
+          - --metrics-bind-address=:8080
+          - --health-probe-bind-address=:8081
+          - --worker-threads=100
+          - --kube-api-qps=100
+          - --kube-api-burst=200
+          - --trace-address=jaeger-collector.observability.svc.cluster.local:4317
+          - --trace-sample-rate=1000000
+          - --trace-service-id=$(POD_NAME)
+          - --metrics-secure=false
+          - --v=2
+        terminationMessagePath: /tmp/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: driver:latest
+        imagePullPolicy: Always
+        securityContext:
+          # Node must run as privileged to access the host's devices.
+          privileged: true
+          capabilities:
+            add: ["SYS_ADMIN"]
+          allowPrivilegeEscalation: true
+        # TODO(user): Configure the resources accordingly based on the project requirements.
+        # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+        resources:
+          limits:
+            cpu: 500m
+            memory: 600Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts:
+        - name: cluster-config
+          mountPath: /etc/cluster-config.yaml
+          subPath: config.yaml
+        - name: device
+          mountPath: /dev
+        - name: k8s-cfg
+          mountPath: /etc/kubernetes/
+          readOnly: true
+        - name: csi-socket-dir
+          mountPath: /csi
+        - name: mountpoint-dir
+          mountPath: /var/lib/kubelet/
+          mountPropagation: Bidirectional
+        ports:
+          - containerPort: 8080
+            name: metrics
+            protocol: TCP
+          - containerPort: 8081
+            name: driver
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: driver
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: driver
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      - name: csi-provisioner
+        args:
+        - --v=2
+        - --csi-address=/csi/lvm.sock
+        - --node-deployment
+        - --http-endpoint=:8090
+        - --retry-interval-start=1s
+        - --retry-interval-max=30s
+        - --worker-threads=100
+        - --kube-api-qps=100
+        - --kube-api-burst=200
+        - --extra-create-metadata
+        - --feature-gates=Topology=true
+        - --strict-topology=true
+        - --enable-capacity
+        - --capacity-ownerref-level=1
+        - --capacity-poll-interval=15s
+        env:
+        # POD_NAME and POD_NAMESPACE are used for capacity tracking support.
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        # NODE_NAME required for deployment on each node.
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: mcr.microsoft.com/oss/kubernetes-csi/csi-provisioner:v5.1.0
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts:
+        - name: csi-socket-dir
+          mountPath: /csi
+        ports:
+          - containerPort: 8090
+            name: provisioner
+            protocol: TCP
+        livenessProbe:
+          failureThreshold: 1
+          tcpSocket:
+            port: provisioner
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+          periodSeconds: 20
+      - name: lvm-resizer
+        image: mcr.microsoft.com/oss/kubernetes-csi/csi-resizer:v1.13.2
+        imagePullPolicy: IfNotPresent
+        args:
+          - --v=2
+          - --csi-address=/csi/lvm.sock
+          - --timeout=240s
+          - --handle-volume-inuse-error=true
+          - --http-endpoint=0.0.0.0:29756
+        env:
+          - name: ADDRESS
+            value: /csi/lvm.sock
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        ports:
+          - containerPort: 29756
+            name: resizer
+            protocol: TCP
+        volumeMounts:
+          - name: csi-socket-dir
+            mountPath: /csi
+        resources:
+          limits:
+            memory: 500Mi
+          requests:
+            cpu: 10m
+            memory: 20Mi
+      - name: csi-registrar
+        args:
+        - "--v=2"
+        - "--csi-address=/csi/lvm.sock"
+        - "--kubelet-registration-path=/var/lib/kubelet/plugins/local.csi.azure.com/lvm.sock"
+        - "--http-endpoint=:8091"
+        image: mcr.microsoft.com/oss/kubernetes-csi/csi-node-driver-registrar:v2.12.0
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts:
+        - name: csi-socket-dir
+          mountPath: /csi
+        - name: registration-dir
+          mountPath: /registration
+        ports:
+          - containerPort: 8091
+            name: registrar
+            protocol: TCP
+        livenessProbe:
+          failureThreshold: 1
+          httpGet:
+            path: /healthz
+            port: registrar
+          initialDelaySeconds: 5
+          timeoutSeconds: 5
+          periodSeconds: 20
+      serviceAccountName: node
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: cluster-config
+        configMap:
+          name: cluster-config
+      - name: device
+        hostPath:
+          path: /dev
+          type: Directory
+      - name: k8s-cfg
+        hostPath:
+          path: /etc/kubernetes/
+          type: DirectoryOrCreate
+      - name: csi-socket-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins/local.csi.azure.com/
+          type: DirectoryOrCreate
+      - name: registration-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins_registry/
+          type: Directory
+      - name: mountpoint-dir
+        hostPath:
+          path: /var/lib/kubelet/
+          type: DirectoryOrCreate

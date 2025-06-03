@@ -1,0 +1,4 @@
+^.*_generated\.deepcopy\.go.*$
+^.*_generated\.go.*$
+^.*[Ff]ake.*\.go.*$
+^.*[Mm]ock.*\.go.*$

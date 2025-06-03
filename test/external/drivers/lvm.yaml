@@ -1,0 +1,40 @@
+StorageClass:
+  FromFile: test/external/drivers/lvm_storageclass.yaml
+DriverInfo:
+  Name: local.csi.azure.com
+  SupportedFsType: {"ext2", "ext3", "ext4", "xfs"}
+  Capabilities:
+    # data is persisted across pod restarts
+    persistence: true
+    # raw block mode
+    block: true
+    # volume ownership via fsGroup
+    fsGroup: true
+    # Driver has the VolumeMountGroup CSI node capability. Because this is a FSGroup feature, the fsGroup capability must also be set to true
+    volumeMountGroup: false
+    # exec a file in the volume
+    exec: true
+    # support populate data from snapshot
+    snapshotDataSource: false
+    # support populate data from pvc
+    pvcDataSource: false
+    # multiple pods on a node can use the same volume concurrently
+    multipods: true
+    # support ReadWriteMany access modes
+    RWX: false
+    # support volume expansion for controller
+    controllerExpansion: false
+    # support volume expansion for node
+    nodeExpansion: true
+    # support volume limits (limit on number of volumes per node)
+    volumeLimits: false
+    # support volume that can run on single node
+    singleNodeVolume: true
+    # support topology
+    topology: true
+    # driver publishes storage capacity information
+    capacity: true
+    # support online volume expansion
+    onlineExpansion: true
+    # support offline volume expansion
+    offlineExpansion: true
