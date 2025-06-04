@@ -52,6 +52,7 @@ for type in "${!FILE_TYPES[@]}"; do
       echo -e "$header\n\n$(cat "$file")" > "$file.tmp"
     fi
 
+    chmod --reference="$file" "$file.tmp"
     mv "$file.tmp" "$file"
   done
 done

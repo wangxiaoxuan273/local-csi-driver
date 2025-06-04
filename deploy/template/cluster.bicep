@@ -31,22 +31,8 @@ param zones array = []
 @description('Enabled will use a separate user pool for the storage pool.')
 param useSeparateUserPool bool = false
 
-@description('The streams to collect and send to Log Analytics.')
-param streams array = [
-  'Microsoft-ContainerInsights-Group-Default'
-]
-
-@description('The resource ID of the Log Analytics workspace.')
-param logAnalyticsWorkspaceId string = resourceId('d64ddb0c-7399-4529-a2b6-037b33265372', 'xstore-log-analytics-rg', 'Microsoft.OperationalInsights/workspaces', 'xstore-log-analytics-workspace')
-
-@description('The location of the Log Analytics workspace.')
-param logAnalyticsWorkspaceLocation string = 'eastus'
-
-@description('The resource ID of the user-assigned managed identity.')
-param userAssignedManagedIdentity string = resourceId('d64ddb0c-7399-4529-a2b6-037b33265372', 'azdiskdrivertest-rg', 'Microsoft.ManagedIdentity/userAssignedIdentities', 'azdiskdrivertest-id')
-
 @description('The resource ID of the security Log Analytics workspace.')
-param securityLogAnalyticsWorkspaceId string = resourceId('d64ddb0c-7399-4529-a2b6-037b33265372', 'DefaultResourceGroup-EUS', 'Microsoft.OperationalInsights/workspaces', 'DefaultWorkspace-d64ddb0c-7399-4529-a2b6-037b33265372-EUS')
+param securityLogAnalyticsWorkspaceId string = resourceId(subscription().subscriptionId, 'DefaultResourceGroup-EUS', 'Microsoft.OperationalInsights/workspaces', 'DefaultWorkspace-${subscription().subscriptionId}-EUS')
 
 // The system pool is used for system pods and the storage pool is used for storage pods.
 var systemPool = {
@@ -75,9 +61,6 @@ var storagePool = {
   mode: useSeparateUserPool ? 'User' : 'System'
   maxPods: 125
   availabilityZones: zones
-  nodeLabels: {
-    'acstor.azure.com/io-engine': 'acstor'
-  }
   enableAutoScaling: enableAutoScaling
   minCount: enableAutoScaling ? minCount : null
   maxCount: enableAutoScaling ? maxCount : null
@@ -85,72 +68,17 @@ var storagePool = {
   enableFIPS: enableFIPS
 }
 
-// Create the data collection rule and associate it with the AKS cluster.
-// The data collection rule collects the specified streams and sends them to the Log Analytics workspace.
-resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
-  name: '${resourceGroup().name}-dcr'
-  location: logAnalyticsWorkspaceLocation
-  tags: resourceGroup().tags
-  kind: 'Linux'
-  properties: {
-    dataSources: {
-      extensions: [
-        {
-          name: 'ContainerInsightsExtension'
-          streams: streams
-          extensionSettings: {
-            dataCollectionSettings: {
-              enableContainerLogV2: true
-            }
-          }
-          extensionName: 'ContainerInsights'
-        }
-      ]
-    }
-    destinations: {
-      logAnalytics: [
-        {
-          workspaceResourceId: logAnalyticsWorkspaceId
-          name: 'la-workspace'
-        }
-      ]
-    }
-    dataFlows: [
-      {
-        streams: streams
-        destinations: [
-          'la-workspace'
-        ]
-      }
-
-    ]
-  }
-}
-
-// Associate the data collection rule with the AKS cluster.
-resource dataCollectionRuleAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = {
-  name: 'ContainerInsightsExtension'
-  scope: aks
-  properties: {
-    description: 'Association of data collection rule. Deleting this association will break the data collection for this AKS Cluster.'
-    dataCollectionRuleId: dataCollectionRule.id
-  }
-}
-
 resource aks 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
   name: '${resourceGroup().name}-cluster'
   location: resourceGroup().location
+  identity: {
+    type: 'SystemAssigned'
+  }
   sku: {
     name: 'Base'
     tier: 'Standard'
   }
   tags: resourceGroup().tags
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${userAssignedManagedIdentity}': {}
-    }
-  }
   properties: {
     nodeResourceGroup: '${resourceGroup().name}-node-rg'
     dnsPrefix: '${resourceGroup().name}-dns'
@@ -158,25 +86,10 @@ resource aks 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
       azurePolicy: {
         enabled: true
       }
-      omsagent: {
-        enabled: true
-        config: {
-          logAnalyticsWorkspaceResourceID: logAnalyticsWorkspaceId
-          useAADAuth: 'true'
-        }
-      }
     }
     agentPoolProfiles: useSeparateUserPool ? [ systemPool, storagePool ] : [ storagePool ]
-    servicePrincipalProfile: {
-      clientId: 'msi'
-    }
     networkProfile: {
       networkPlugin: 'azure'
-    }
-    identityProfile: {
-      kubeletidentity: {
-        resourceId: userAssignedManagedIdentity
-      }
     }
     securityProfile: {
       defender: {

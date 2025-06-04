@@ -1,35 +1,268 @@
-# name: E2E Tests
+name: E2E Tests
 
-# on:
-#   push:
-#   pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
-# jobs:
-#   test-e2e:
-#     name: Run on Ubuntu
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Clone the code
-#         uses: actions/checkout@v4
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, release-**]
 
-#       - name: Setup Go
-#         uses: actions/setup-go@v5
-#         with:
-#           go-version: '~1.23'
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  id-token: write
 
-#       - name: Install the latest version of kind
-#         run: |
-#           curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
-#           chmod +x ./kind
-#           sudo mv ./kind /usr/local/bin/kind
+env:
+  MAJOR: "0"
+  MINOR: "0"
+  PATCH: "1"
+  PYTHON_VERSION: "3.x"
+  REGISTRY: "localcsidriver.azurecr.io"
+  REPO_BASE: "local-csi-driver"
 
-#       - name: Verify kind installation
-#         run: kind version
+jobs:
+  vars:
+    runs-on: ubuntu-latest
+    outputs:
+      TAG: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
 
-#       - name: Create kind cluster
-#         run: kind create cluster
+      - name: Set tag
+        id: set-tag
+        run: |
+          # Get short commit SHA (7 characters)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          # Create tag in format MAJOR.MINOR.PATCH-REF
+          TAG="${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-${SHORT_SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Generated tag: ${TAG}"
+  build-docker:
+    needs: vars
+    runs-on: ubuntu-latest
+    environment: pull-request
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+        with:
+          egress-policy: audit
 
-#       - name: Running Test e2e
-#         run: |
-#           go mod tidy
-#           make test-e2e
+      - name: Check out the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Azure CLI Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login -n ${{ env.REGISTRY }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+        id: setup-buildx
+
+      - name: Set build date
+        id: build-date
+        run: echo "date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
+
+      - name: Docker build
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ needs.vars.outputs.TAG }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_ID=${{ github.run_id }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build-date.outputs.date }}
+
+  build-helm:
+    needs: vars
+    runs-on: ubuntu-latest
+    environment: pull-request
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+        with:
+          egress-policy: audit
+
+      - name: Check out the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Azure CLI Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login -n ${{ env.REGISTRY }}
+
+      - name: Build and push Helm chart
+        run: |
+          make helm-build REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG=${{ needs.vars.outputs.TAG }}
+          make helm-login REGISTRY=${{ env.REGISTRY }}
+          make helm-push REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG=${{ needs.vars.outputs.TAG }}
+
+  e2e-test:
+    needs: [build-docker, build-helm, vars]
+    runs-on: ubuntu-latest
+    environment: pull-request
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - name: "Kind Integration Test"
+            command: "test-e2e"
+            cluster_type: "kind"
+
+          - name: "AKS Integration Test Azure Linux"
+            command: "test-e2e-aks"
+            cluster_type: "aks"
+            aks_template: "nvme"
+
+          - name: "AKS Integration Test Ubuntu"
+            command: "test-e2e-aks"
+            cluster_type: "aks"
+            aks_template: "nvme-ubuntu"
+
+          - name: "External E2E Test"
+            command: "test-external-e2e"
+            cluster_type: "aks"
+            aks_template: "nvme"
+
+          - name: "Sanity Test"
+            command: "test-sanity"
+            cluster_type: "aks"
+            aks_template: "nvme-single-node"
+
+    name: ${{ matrix.test.name }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-telemetry: true
+
+      - name: Check out the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Azure CLI Login
+        if: ${{ success() && matrix.test.cluster_type == 'aks' }}
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup CloudTestGroupExecutionId
+        run: |
+          TEST_ID=$(echo "${{ matrix.test.name }}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
+          CLOUDTEST_ID="${{ github.run_id }}-${TEST_ID}-${{ github.run_attempt }}"
+          echo "CloudTestGroupExecutionId=${CLOUDTEST_ID}" >> "$GITHUB_ENV"
+          echo "Generated CloudTestGroupExecutionId: ${CLOUDTEST_ID}"
+
+      - name: Run ${{ matrix.test.name }}
+        run: |
+          python .github/workflows/scripts/run_tests.py \
+            --command "make ${{ matrix.test.command }} REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG=${{ needs.vars.outputs.TAG }}" \
+            --cluster-type ${{ matrix.test.cluster_type }} \
+            ${{ matrix.test.cluster_type == 'aks' && '--run-dry-run' || '' }} \
+            ${{ matrix.test.aks_template && format('--aks-template {0}', matrix.test.aks_template) || '' }}
+
+      - name: Cleanup cluster
+        if: ${{ always() && matrix.test.cluster_type == 'aks' }}
+        run: |
+          if [[ -z "${{ env.CloudTestGroupExecutionId }}" || "${{ env.CloudTestGroupExecutionId }}" =~ ^[[:space:]]*$ ]]; then
+            echo "Warning: CloudTestGroupExecutionId is empty or whitespace. Skipping cleanup."
+            exit 0
+          fi
+          RG="lcd-${{ env.CloudTestGroupExecutionId }}"
+          ./deploy/scripts/clean.sh --resource-group "$RG"
+
+      - name: Sanitize artifacts
+        run: |
+          SECRETS=(
+            "${{ secrets.AZURE_CLIENT_ID }}"
+            "${{ secrets.AZURE_TENANT_ID }}"
+            "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          )
+
+          FILES=$(find ./support-bundles -type f) # recursively find all files
+          FILES+=" ./JUnit.xml" # explicitly add JUnit.xml
+
+          for secret_value in "${SECRETS[@]}"; do
+            if [[ -n "$secret_value" ]]; then
+              for file in $FILES; do
+                if [[ -f "$file" ]]; then
+                  sed -i "s/${secret_value}/<REDACTED>/g" "$file" || true
+                fi
+              done
+            fi
+          done
+
+      - name: Upload Go test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-artifacts-${{ env.CloudTestGroupExecutionId }}
+          path: |
+            ./support-bundles
+            ./JUnit.xml
+
+      - name: Publish Test Results
+        uses: dorny/test-reporter@890a17cecf52a379fc869ab770a71657660be727 # v2.1.0
+        if: always()
+        with:
+          name: ${{ matrix.test.name }} Results
+          path: ./JUnit.xml
+          reporter: java-junit
+          fail-on-error: true
+          fail-on-empty: true

@@ -74,9 +74,9 @@ module cluster 'cluster.bicep' = {
   }
 }
 
-module cleanupAssignment 'cleanupRoleAssignment.bicep' = if (isTest) {
-  name: 'cleanupAssignmentModule'
-  scope: resourceGroup
-}
+// module cleanupAssignment 'cleanupRoleAssignment.bicep' = if (isTest) {
+//   name: 'cleanupAssignmentModule'
+//   scope: resourceGroup
+// }
 
 output managedClusterName string = cluster.outputs.managedClusterName

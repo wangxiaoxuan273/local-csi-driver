@@ -27,7 +27,6 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          submodules: true
           fetch-depth: 0
 
       - name: Set up Go
@@ -35,14 +34,22 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
-        id: go
 
-      - name: Build driver image from Dockerfile
-        run: |
-          REGISTRY=test TAG=latest make docker-build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Docker build
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        with:
+          context: .
+          push: false
+          tags: test/local-csi-driver/driver:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@76071ef0d7ec797419534a183b498b4d6366cf37 # 0.31.0
         env:
           TRIVY_DB_REPOSITORY: "public.ecr.aws/aquasecurity/trivy-db:2"
         with:
