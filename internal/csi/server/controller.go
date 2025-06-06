@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"local-csi-driver/internal/pkg/telemetry"
 )
@@ -69,6 +69,8 @@ func NewControllerServer(endpoint string, driver ControllerService, t telemetry.
 //
 // The server will stop when the provided context is canceled.
 func (s *ControllerServer) Start(ctx context.Context) error {
+	log := log.FromContext(ctx)
+
 	listener, err := net.Listen(s.proto, s.addr)
 	if err != nil {
 		return fmt.Errorf("failed to create listener on %s://%s: %w", s.proto, s.addr, err)
@@ -90,7 +92,7 @@ func (s *ControllerServer) Start(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		klog.InfoS("listening for connections", "endpoint", listener.Addr())
+		log.V(2).Info("listening for connections", "endpoint", listener.Addr())
 		errCh <- server.Serve(listener)
 		close(errCh)
 	}()

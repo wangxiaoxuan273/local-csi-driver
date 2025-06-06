@@ -15,7 +15,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"k8s.io/component-base/tracing"
 	tracingv1 "k8s.io/component-base/tracing/api/v1"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -39,12 +39,14 @@ var (
 //
 // The provider is stored globally and can be retrieved with GetTracerProvider.
 func New(ctx context.Context, service string, id string, endpoint string, sampleRate int) (tracing.TracerProvider, error) {
+	log := log.FromContext(ctx)
+
 	if endpoint == "" {
-		klog.InfoS("--trace-address not set, tracing disabled")
+		log.V(2).Info("--trace-address not set, tracing disabled")
 		tp = tracing.NewNoopTracerProvider()
 		return tp, nil
 	}
-	klog.InfoS("setting up trace exporter", "endpoint", endpoint, "rate", sampleRate)
+	log.V(2).Info("setting up trace exporter", "endpoint", endpoint, "rate", sampleRate)
 
 	opts := []otlptracegrpc.Option{}
 	rate := int32(sampleRate)
