@@ -18,10 +18,10 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/volume/util/hostutil"
 	mountutils "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"local-csi-driver/internal/pkg/retry"
 )
@@ -158,6 +158,8 @@ func (r *Mounter) CleanupStagingDir(ctx context.Context, path string) error {
 	))
 	defer span.End()
 
+	log := log.FromContext(ctx)
+
 	// All errors are retriable.
 	isRetriable := func(err error) bool {
 		return true
@@ -175,7 +177,7 @@ func (r *Mounter) CleanupStagingDir(ctx context.Context, path string) error {
 		))
 
 		for _, ref := range refs {
-			klog.InfoS("cleaning up staging dir", "stagingPath", ref)
+			log.V(2).Info("cleaning up staging dir", "stagingPath", ref)
 			span.AddEvent("unmounting", trace.WithAttributes(
 				attribute.String("mount.path", ref),
 			))
@@ -224,7 +226,6 @@ func (r *Mounter) cleanupStagingDir(path string) error {
 	dataFile := volPath + "/vol_data.json"
 	if err := os.Remove(dataFile); err != nil {
 		if os.IsNotExist(err) {
-			klog.V(4).Infof("volume data file %s does not exist, this may not be a staging dir so skipping volume path removal", dataFile)
 			return nil
 		}
 		return fmt.Errorf("failed to delete volume data file %s: %v", dataFile, err)

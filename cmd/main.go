@@ -19,7 +19,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	"k8s.io/utils/exec"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,7 +56,7 @@ const (
 
 var (
 	scheme = runtime.NewScheme()
-	log    = ctrl.Log.WithName("setup")
+	log    = ctrl.Log
 )
 
 func init() {
@@ -117,14 +116,17 @@ func main() {
 		"The service id to set in traces that identifies this service instance.")
 	flag.BoolVar(&printVersionAndExit, "version", false, "Print version and exit")
 	flag.BoolVar(&eventRecorderEnabled, "event-recorder-enabled", true, "If enabled, the driver will use the event recorder to record events. This is useful for debugging and monitoring purposes.")
-	// Initialize klog flags
-	klog.InitFlags(flag.CommandLine)
 
-	// Parse flags
+	// Initialize logger flagsconfig.
+	logConfig := textlogger.NewConfig(textlogger.VerbosityFlagName("v"))
+	logConfig.AddFlags(flag.CommandLine)
+
+	// Parse flags.
 	flag.Parse()
 
-	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
+	ctrl.SetLogger(textlogger.NewLogger(logConfig))
 
+	// Log version set by build process.
 	version.Log(log)
 	if printVersionAndExit {
 		return

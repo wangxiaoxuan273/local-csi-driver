@@ -17,8 +17,8 @@ import (
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"local-csi-driver/internal/csi/capability"
 	"local-csi-driver/internal/csi/core"
@@ -85,6 +85,8 @@ func (cs *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest
 	))
 	defer span.End()
 
+	log := log.FromContext(ctx)
+
 	// Validate controller capabilities.
 	if err := capability.ValidateController(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME, cs.caps); err != nil {
 		span.SetStatus(otcodes.Error, "controller validation failed")
@@ -107,7 +109,7 @@ func (cs *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest
 			// We error in this scenario because we need the PVC to be able to
 			// be able to check the owner references and set the volume to be
 			// accessible from all nodes if it is not a generic ephemeral volume.
-			klog.ErrorS(err, "failed to get pvc", "name", req.Parameters[core.PVCNameParam], "namespace", req.Parameters[core.PVCNamespaceParam])
+			log.Error(err, "failed to get pvc", "name", req.Parameters[core.PVCNameParam], "namespace", req.Parameters[core.PVCNamespaceParam])
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		ctx = events.WithObjectIntoContext(ctx, cs.recorder, pvc)
@@ -116,7 +118,7 @@ func (cs *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest
 	// Create using the volume api.
 	vol, err := cs.volume.Create(ctx, req)
 	if err != nil {
-		klog.ErrorS(err, "failed to create volume", "name", req.GetName())
+		log.Error(err, "failed to create volume", "name", req.GetName())
 		span.SetStatus(otcodes.Error, "CreateVolume failed")
 		span.RecordError(err)
 		return nil, fromCoreError(err)
@@ -131,7 +133,7 @@ func (cs *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest
 		if pvc == nil {
 			// We get the pvc from the request above, if we skip it will be nil
 			// and we will not be able to set the volume to be accessible from all nodes.
-			klog.Warning(err, "pvc name or namespace not found in request")
+			log.V(2).Info("CreateVolume succeeded but pvc namespace or name not found")
 			span.SetStatus(otcodes.Ok, "CreateVolume succeeded but pvc namespace or name not found")
 			return &csi.CreateVolumeResponse{Volume: vol}, nil
 		}
@@ -157,6 +159,8 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 	))
 	defer span.End()
 
+	log := log.FromContext(ctx)
+
 	if req.GetVolumeId() == "" {
 		span.SetStatus(otcodes.Error, "volume id missing")
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
@@ -166,7 +170,7 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 	// In this condition, the sanity tests expect us to return OK
 	pvName, err := cs.volume.GetVolumeName(req.GetVolumeId())
 	if err != nil {
-		klog.ErrorS(err, "failed to get volume name", "volumeID", req.GetVolumeId())
+		log.Error(err, "failed to get volume name", "volumeID", req.GetVolumeId())
 		span.SetStatus(otcodes.Ok, "volume not found")
 		return &csi.DeleteVolumeResponse{}, nil
 	}
@@ -181,14 +185,14 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 		// Get the pv and check selected node annotation
 		if err := cs.k8sClient.Get(ctx, client.ObjectKey{Name: pvName}, pv); err != nil {
 			if client.IgnoreNotFound(err) != nil {
-				klog.ErrorS(err, "failed to get pv", "name", pvName)
+				log.Error(err, "failed to get pv", "name", pvName)
 				span.SetStatus(otcodes.Error, "DeleteVolume failed")
 				span.RecordError(err)
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 			// If the pv is not found, it means it has already been deleted.
 			// This is not an error, so we return success.
-			klog.InfoS("pv not found, assuming it has already been deleted", "name", pvName)
+			log.V(2).Info("pv not found, assuming it has already been deleted", "name", pvName)
 			span.SetStatus(otcodes.Ok, "volume not found")
 			return &csi.DeleteVolumeResponse{}, nil
 		}
@@ -208,11 +212,11 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 			// volume.
 			if err := cs.k8sClient.Get(ctx, client.ObjectKey{Name: node}, &corev1.Node{}); err != nil {
 				if client.IgnoreNotFound(err) == nil { // node not found
-					klog.InfoS("node not found, assuming it has been deleted", "name", node)
+					log.V(2).Info("node not found, assuming it has been deleted", "name", node)
 					span.SetStatus(otcodes.Ok, "node not found")
 					return &csi.DeleteVolumeResponse{}, nil
 				}
-				klog.ErrorS(err, "failed to get node", "name", node)
+				log.Error(err, "failed to get node", "name", node)
 			}
 
 			// If the nodeName does not match the selected node, we cannot
@@ -230,7 +234,7 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 		// flag.
 		pv = &corev1.PersistentVolume{}
 		if err := cs.k8sClient.Get(ctx, client.ObjectKey{Name: pvName}, pv); err != nil {
-			klog.Error(err, "failed to get persistent volume")
+			log.Error(err, "failed to get persistent volume")
 			// Getting PV for events recording will be best effort, we could be
 			// running outside of a k8s cluster, so we don't want to fail the
 			// delete volume request if we can't get the PV.
@@ -255,7 +259,7 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 	span.SetAttributes(attribute.String("device.path", devicePath))
 
 	if devicePath != "" {
-		klog.V(2).InfoS("unmounting volume before deletion", "devicePath", devicePath)
+		log.V(2).Info("unmounting volume before deletion", "devicePath", devicePath)
 		if err := cs.mounter.CleanupStagingDir(ctx, devicePath); err != nil {
 			span.SetStatus(otcodes.Error, "failed to unmount before volume deletion")
 			span.RecordError(err)
@@ -265,7 +269,7 @@ func (cs *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest
 	}
 
 	if err := cs.volume.Delete(ctx, req); err != nil {
-		klog.ErrorS(err, "failed to delete volume", "id", req.GetVolumeId())
+		log.Error(err, "failed to delete volume", "id", req.GetVolumeId())
 		span.SetStatus(otcodes.Error, "DeleteVolume failed")
 		span.RecordError(err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -325,6 +329,8 @@ func (cs *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) 
 	))
 	defer span.End()
 
+	log := log.FromContext(ctx)
+
 	start := 0
 	if req.StartingToken != "" {
 		var err error
@@ -342,7 +348,7 @@ func (cs *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) 
 
 	resp, err := cs.volume.List(ctx, req)
 	if err != nil {
-		klog.ErrorS(err, "failed to list volumes")
+		log.Error(err, "failed to list volumes")
 		span.SetStatus(otcodes.Error, "DeleteVolume failed")
 		span.RecordError(err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -361,9 +367,11 @@ func (cs *Server) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) 
 	))
 	defer span.End()
 
+	log := log.FromContext(ctx)
+
 	resp, err := cs.volume.GetCapacity(ctx, req)
 	if err != nil {
-		klog.ErrorS(err, "failed to get capacity")
+		log.Error(err, "failed to get capacity")
 		span.SetStatus(otcodes.Error, "GetCapacity failed")
 		span.RecordError(err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -382,7 +390,6 @@ func (cs *Server) ControllerModifyVolume(context.Context, *csi.ControllerModifyV
 
 // Default supports all capabilities.
 func (cs *Server) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
-	klog.InfoS("ControllerGetCapabilities", "capabilities", cs.caps)
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: cs.caps,
 	}, nil

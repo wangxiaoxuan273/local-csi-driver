@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"local-csi-driver/internal/pkg/telemetry"
 )
@@ -68,7 +68,9 @@ func NewCombined(endpoint string, driver CombinedService, t telemetry.Provider) 
 //
 // The server will stop when the provided context is canceled.
 func (s *CombinedServer) Start(ctx context.Context) error {
-	klog.InfoS("starting combined CSI server", "endpoint", s.addr)
+	log := log.FromContext(ctx)
+	log.V(2).Info("starting CSI server", "endpoint", s.addr)
+
 	listener, err := net.Listen(s.proto, s.addr)
 	if err != nil {
 		return fmt.Errorf("failed to create listener on %s://%s: %w", s.proto, s.addr, err)
@@ -94,7 +96,7 @@ func (s *CombinedServer) Start(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		klog.InfoS("listening for connections", "endpoint", listener.Addr())
+		log.V(2).Info("listening for connections", "endpoint", listener.Addr())
 		errCh <- server.Serve(listener)
 		close(errCh)
 	}()
@@ -106,28 +108,32 @@ func (s *CombinedServer) Start(ctx context.Context) error {
 }
 
 // getLogLevel returns the log level for the given method.
-func getLogLevel(method string) int32 {
+func getLogLevel(method string) int {
 	if method == "/csi.v1.Identity/Probe" ||
+		method == "/csi.v1.Identity/GetPluginInfo" ||
+		method == "/csi.v1.Identity/GetPluginCapabilities" ||
+		method == "/csi.v1.Node/NodeGetInfo" ||
 		method == "/csi.v1.Node/NodeGetCapabilities" ||
 		method == "/csi.v1.Node/NodeGetVolumeStats" ||
+		method == "/csi.v1.Controller/ControllerGetCapabilities" ||
 		method == "/csi.v1.Controller/ListVolumes" ||
 		method == "/csi.v1.Controller/GetCapacity" {
-		return 3
+		return 4
 	}
-	return 1
+	return 2
 }
 
 // LoggingInterceptor for unary gRPC calls.
 func LoggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	level := klog.Level(getLogLevel(info.FullMethod))
-	klog.V(level).Infof("gRPC method called: %s", info.FullMethod)
-	klog.V(level).Infof("gRPC request: %s", protosanitizer.StripSecrets(req))
+	log := log.FromContext(ctx)
+	level := getLogLevel(info.FullMethod)
+	log.V(level).Info("gRPC request", "method", info.FullMethod, "request", protosanitizer.StripSecrets(req))
 
 	resp, err := handler(ctx, req)
 	if err != nil {
-		klog.Errorf("gRPC error: %v", err)
+		log.Info("gRPC error", "method", info.FullMethod, "error", err)
 	} else {
-		klog.V(level).Infof("gRPC response: %s", protosanitizer.StripSecrets(resp))
+		log.V(level).Info("gRPC response", "method", info.FullMethod, "response", protosanitizer.StripSecrets(resp))
 	}
 	return resp, err
 }
