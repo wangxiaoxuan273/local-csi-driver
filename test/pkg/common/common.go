@@ -33,8 +33,6 @@ var (
 	// Optional Environment Variables:
 	// - SKIP_INSTALL_PROMETHEUS=true: Skips Prometheus Operator installation
 	//   during test setup.
-	// - SKIP_INSTALL_CERT_MANAGER=true: Skips CertManager installation during
-	//   test setup.
 	// - SKIP_UNINSTALL=true: Skips uninstalling everything. Useful for
 	//   debugging and re-running tests.
 	// - CREATE_CLUSTER=true: Creates and deletes a new Kind cluster. Useful for
@@ -45,16 +43,12 @@ var (
 	// - INSTALLATION_METHOD=helm: Installs csi driver using helm, otherwise installs
 	//   using make install and make deploy.
 	skipPrometheusInstall                = os.Getenv("SKIP_INSTALL_PROMETHEUS") == trueString
-	skipCertManagerInstall               = os.Getenv("SKIP_INSTALL_CERT_MANAGER") == trueString
 	skipUninstall                        = os.Getenv("SKIP_UNINSTALL") == trueString
 	createCluster                        = os.Getenv("CREATE_CLUSTER") == trueString
 	skipSupportBundle                    = os.Getenv("SKIP_SUPPORT_BUNDLE") == trueString
 	skipBuild                            = os.Getenv("SKIP_BUILD") == trueString
 	useLocalHelmCharts                   = os.Getenv("INSTALLATION_METHOD") == "localHelm"
 	isPrometheusOperatorAlreadyInstalled = false
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs are
-	// found on the cluster.
-	isCertManagerAlreadyInstalled = false
 
 	// isKindClusterCreated will be set true when a Kind cluster is already created.
 	isKindClusterCreated = false
@@ -182,18 +176,6 @@ func Setup(ctx context.Context, namespace string) {
 			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Prometheus Operator is already installed. Skipping installation...\n")
 		}
 	}
-	if !skipCertManagerInstall {
-		By("checking if cert manager is installed already")
-		isCertManagerAlreadyInstalled = utils.IsCertManagerCRDsInstalled(ctx)
-		if !isCertManagerAlreadyInstalled {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
-			Eventually(func(g Gomega, ctx context.Context) {
-				g.Expect(utils.InstallCertManager(ctx)).To(Succeed(), "CertManager installed successfully")
-			}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "Failed to install CertManager")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
-		}
-	}
 
 	By("creating namespace")
 	Eventually(func(g Gomega) {
@@ -204,25 +186,6 @@ func Setup(ctx context.Context, namespace string) {
 			g.Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
 		}
 	}).WithContext(ctx).Should(Succeed(), "Namespace creation failed or namespace not found")
-
-	By("validating that the cert-manager-webhook endpoint is up")
-	verifyEndpointUp := func(g Gomega) {
-		// Verify that webhooks are available
-		cmd := exec.CommandContext(ctx, "kubectl", "get", "endpoints", "cert-manager-webhook",
-			"-n", "cert-manager", "-o", "jsonpath={.subsets[*].addresses[*].ip}")
-		output, err := utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve webhook service endpoints")
-		g.Expect(output).NotTo(BeEmpty(), "Webhook service endpoints are not available")
-
-		cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", FakeCertFixture)
-		_, err = utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to create fake certificate")
-
-		cmd = exec.CommandContext(ctx, "kubectl", "delete", "-f", FakeCertFixture)
-		_, err = utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to delete fake certificate")
-	}
-	Eventually(verifyEndpointUp).WithContext(ctx).Should(Succeed())
 
 	if useLocalHelmCharts {
 		By("installing csi driver with local helm charts")
@@ -293,10 +256,6 @@ func Teardown(ctx context.Context, namespace string) {
 	if !skipPrometheusInstall && !isPrometheusOperatorAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling Prometheus Operator...\n")
 		utils.UninstallPrometheusOperator(ctx)
-	}
-	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
-		utils.UninstallCertManager(ctx)
 	}
 
 	if !kind.IsCluster() {

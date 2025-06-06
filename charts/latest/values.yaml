@@ -63,6 +63,8 @@ node:
     - --nodeName=$(NODE_NAME)
     - --podName=$(POD_NAME)
     - --namespace=$(POD_NAMESPACE)
+    - --certificate-secret-name=webhook-server-cert
+    - --webhook-service-name=local-csi-driver-webhook-service
     - --config=/etc/cluster-config.yaml
     - --csi-bind-address=unix:///csi/lvm.sock
     - --metrics-bind-address=:8080

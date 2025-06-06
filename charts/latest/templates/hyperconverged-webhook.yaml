@@ -2,8 +2,6 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: {{ include "chart.fullname" . }}-hyperconverged-webhook
-  annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "chart.fullname" . }}-serving-cert
   labels:
   {{- include "chart.labels" . | nindent 4 }}
 webhooks:

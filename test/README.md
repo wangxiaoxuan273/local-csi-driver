@@ -54,10 +54,6 @@ to speed up successive runs.
 [Prometheus][prometheus], which is installed by default so that metrics can be
 verified.
 
-`SKIP_INSTALL_CERT_MANAGER` set to `true` will skip the
-[cert-manager][cert-manager] install. This should be used with care as
-cert-manager is required to provision certificates for the webhooks.
-
 `SKIP_METRICS` set to `true` will skip the metrics endpoint tests. These rarely
 change and add to test duration.
 
@@ -220,5 +216,4 @@ extracted into functions that are covered by unit tests.
 [kind]: https://kind.sigs.k8s.io/
 [ginkgo]: https://onsi.github.io/ginkgo/
 [prometheus]: https://prometheus.io/
-[cert-manager]: https://cert-manager.io/
 [jaeger]: https://www.jaegertracing.io/

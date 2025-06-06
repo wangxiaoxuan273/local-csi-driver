@@ -1,8 +1,8 @@
 # User Guide
 
 This guide provides step-by-step instructions for setting up and using the
-local-csi-driver, including installing Helm, cert-manager, creating a
-StorageClass, and deploying a StatefulSet.
+local-csi-driver, including installing Helm, creating a StorageClass, and
+deploying a StatefulSet.
 
 ## Prerequisites
 
@@ -15,13 +15,6 @@ Before proceeding, ensure you have the following installed:
 ## Installing Helm
 
 To install Helm, please follow the official [Helm installation guide](https://helm.sh/docs/intro/install/).
-
-## Installing cert-manager
-
-You need to install cert-manager prior to installing `local-csi-driver`.
-
-To install cert-manager, please refer to the official
-[cert-manager installation guide](https://cert-manager.io/docs/installation/).
 
 ## Installing local-csi-driver
 

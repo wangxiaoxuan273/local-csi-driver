@@ -15,7 +15,9 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 
 	"github.com/gotidy/ptr"
+	"github.com/open-policy-agent/cert-controller/pkg/rotator"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -69,6 +71,8 @@ func main() {
 	var nodeName string
 	var podName string
 	var namespace string
+	var certSecretName string
+	var webhookSvcName string
 	var configFile string
 	var csiAddr string
 	var metricsAddr string
@@ -90,6 +94,10 @@ func main() {
 		"The name of the pod this agent is running on.")
 	flag.StringVar(&namespace, "namespace", "default",
 		"The namespace to use for creating objects.")
+	flag.StringVar(&certSecretName, "certificate-secret-name", "webhook-server-cert",
+		"The name of the secret used to store the certificates.")
+	flag.StringVar(&webhookSvcName, "webhook-service-name", "webhook-service",
+		"The name of the service used by the webhook server.")
 	flag.StringVar(&configFile, "config", "",
 		"The controller will load its initial configuration from this file. "+
 			"Omit this flag to use the default configuration values.")
@@ -191,17 +199,6 @@ func main() {
 		// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'. More info:
 		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.1/pkg/metrics/filters#WithAuthenticationAndAuthorization
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
-
-		// TODO(user): If CertDir, CertName, and KeyName are not specified, controller-runtime will automatically
-		// generate self-signed certificates for the metrics server. While convenient for development and testing,
-		// this setup is not recommended for production.
-
-		// TODO(user): If cert-manager is enabled in config/default/kustomization.yaml,
-		// you can uncomment the following lines to use the certificate managed by cert-manager.
-		// metricsServerOptions.CertDir = "/tmp/k8s-metrics-server/metrics-certs"
-		// metricsServerOptions.CertName = "tls.crt"
-		// metricsServerOptions.KeyName = "tls.key"
-
 	}
 
 	// Override the default QPS and Burst settings for the Kubernetes client.
@@ -225,6 +222,38 @@ func main() {
 	// Add telemetry to manager.
 	if err := mgr.Add(t); err != nil {
 		logAndExit(err, "unable to add telemetry to internal manager")
+	}
+
+	// Make sure certs are generated and valid if cert rotation is enabled.
+	log.Info("setting up cert rotation")
+	setupFinished := make(chan struct{})
+	if err := rotator.AddRotator(mgr, &rotator.CertRotator{
+		SecretKey: types.NamespacedName{
+			Namespace: namespace,
+			Name:      certSecretName,
+		},
+		CertDir:        "/tmp/k8s-webhook-server/serving-certs",
+		CAName:         "local-csi-ca",
+		CAOrganization: "Microsoft",
+		DNSName:        fmt.Sprintf("%s.%s.svc", webhookSvcName, namespace),
+		ExtraDNSNames: []string{
+			fmt.Sprintf("%s.%s.svc.cluster.local", webhookSvcName, namespace),
+			fmt.Sprintf("%s.%s", webhookSvcName, namespace),
+		},
+		Webhooks: []rotator.WebhookInfo{
+			{
+				Name: "local-csi-driver-pvc-create-webhook",
+				Type: rotator.Validating,
+			},
+			{
+				Name: "local-csi-driver-hyperconverged-webhook",
+				Type: rotator.Mutating,
+			},
+		},
+		IsReady: setupFinished,
+	}); err != nil {
+		log.Error(err, "unable to set up cert rotation")
+		os.Exit(1)
 	}
 
 	// Setup all Controllers.
