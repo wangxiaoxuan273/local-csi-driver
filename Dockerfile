@@ -1,10 +1,7 @@
 # Build the node binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24-azurelinux3.0 AS builder
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.24-azurelinux3.0@sha256:6de9a6ea109ef35525bdf2044df551ee3d9648745192b8743d98ae6a4ddda498 AS builder
 ARG TARGETOS
 ARG TARGETARCH
-ARG GIT_COMMIT
-ARG BUILD_DATE
-ARG BUILD_ID
 
 
 WORKDIR /workspace
@@ -25,6 +22,10 @@ COPY cmd/ cmd/
 COPY api/ api/
 COPY internal/ internal/
 
+ARG GIT_COMMIT
+ARG BUILD_DATE
+ARG BUILD_ID
+
 # Build the GOARCH has not a default value to allow the binary be built
 # according to the host where the command was called. For example, if we call
 # make docker-build in a local env which has the Apple Silicon M1 SO the docker
@@ -42,7 +43,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -v -ldflags "${LDFLAGS}" -o local-csi-driver cmd/main.go
 
 
-FROM mcr.microsoft.com/azurelinux/base/core:3.0 AS dependency-install
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:91d58fce1e27dd0b711e569fdc173cfb0aec950ff399ea567723936d785388ba AS dependency-install
 RUN tdnf install -y --releasever 3.0 --installroot /staging \
     lvm2 \
     e2fsprogs \
@@ -52,7 +53,7 @@ RUN tdnf install -y --releasever 3.0 --installroot /staging \
     && rm -rf /staging/run /staging/var/log /staging/var/cache/tdnf
 
 # Use distroless as minimal base image to package the driver binary.
-FROM mcr.microsoft.com/azurelinux/distroless/minimal:3.0
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/azurelinux/distroless/minimal:3.0@sha256:55f0a7c5b19fa727de1d4845c83b34f82fad159df4692768510a8eb6f0fd9e06
 WORKDIR /
 COPY --from=builder /workspace/local-csi-driver .
 COPY --from=dependency-install /staging /
@@ -60,6 +61,4 @@ COPY --from=dependency-install /staging /
 # Set the environment variable to disable udev and just use lvm.
 ENV DM_DISABLE_UDEV=1
 
-# Default to root user since the driver needs to run as root.
-ENV PATH="${PATH}:/lib/udev"
 ENTRYPOINT ["/local-csi-driver"]

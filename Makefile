@@ -103,12 +103,14 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate envtest ## Run tests and generate coverage report
+test: manifests generate envtest go-junit-report gocov gocov-xml ## Run tests and generate coverage report
 	$(eval TMP := $(shell mktemp -d))
-	$(eval TMP_COVER := $(TMP)/cover.out)
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
-		go test -race -v -p 8 $$(go list ./... | grep -v -e /test/) -coverprofile $(TMP_COVER)
-	@cat $(TMP_COVER) | grep -v -E -f .covignore > $(TEST_COVER)
+		go test -race -v -p 8 $$(go list ./... | grep -v -e /test/) -coverprofile $(TMP)/cover.out 2>&1 | \
+		$(GO_JUNIT_REPORT) -set-exit-code -iocopy -out $(TEST_OUTPUT)
+	@cat $(TMP)/cover.out | grep -v -E -f .covignore > $(TMP)/cover.clean
+	@$(GOCOV) convert $(TMP)/cover.clean | $(GOCOV_XML) > $(TEST_COVER)
+	@rm $(TMP)/cover.out $(TMP)/cover.clean && rmdir $(TMP)
 
 
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -196,21 +198,36 @@ run: manifests generate fmt vet ## Run the local CSI driver from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
-docker-build: controller-gen ## Build the docker image.
+docker-build: docker-buildx controller-gen ## Build the docker image.
 	$(call docker-build,Dockerfile,${IMG})
+
+# buildx builder arguments
+BUILDX_BUILDER_NAME ?= img-builder
+OUTPUT_TYPE ?= type=registry
+QEMU_VERSION ?= 7.2.0-1
+ARCH ?= amd64,arm64
+BUILDKIT_VERSION ?= v0.18.1
+
+.PHONY: docker-buildx
+docker-buildx: ## Install and configure docker buildx for multiple architectures.
+	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
+		docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		docker buildx create --name $(BUILDX_BUILDER_NAME) --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:$(BUILDKIT_VERSION) --use; \
+		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
+	fi
 
 # Define a function to build docker images. Skips the BUILD_DATE arg
 # intentionally to avoid retriggering builds when the date changes.
 define docker-build
-	DOCKER_BUILDKIT=1 $(CONTAINER_TOOL) build \
+	DOCKER_BUILDKIT=1 $(CONTAINER_TOOL) buildx build \
 		--build-arg GIT_COMMIT=$(COMMIT_HASH) \
 		--build-arg BUILD_ID=$(TAG) \
-		-f $(1) -t $(2) .
+		--output=$(OUTPUT_TYPE) \
+		--platform linux/$(ARCH) \
+		--pull \
+		--tag $(2) \
+		-f $(1) .
 endef
-
-.PHONY: docker-push
-docker-push: ## Push the docker image.
-	$(CONTAINER_TOOL) push ${IMG}
 
 .PHONY: docker-load
 docker-load: ## Load the docker image into the kind cluster.
@@ -415,7 +432,10 @@ MOCK_GEN ?= $(LOCALBIN)/mockgen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 KIND ?= $(LOCALBIN)/kind
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GO_JUNIT_REPORT ?= $(LOCALBIN)/go-junit-report
 GINKGO ?= $(LOCALBIN)/ginkgo
+GOCOV ?= $(LOCALBIN)/gocov
+GOCOV_XML ?= $(LOCALBIN)/gocov-xml
 HADOLINT ?= $(LOCALBIN)/hadolint
 CONTAINER_STRUCTURE_TEST ?= $(LOCALBIN)/container-structure-test
 SUPPORT_BUNDLE ?= $(LOCALBIN)/support-bundle
@@ -435,6 +455,8 @@ CERT_MANAGER_VERSION ?= 1.12.12-5
 PROMETHEUS_VERSION ?= v0.77.1
 JAEGER_VERSION ?= v1.62.0
 GINKGO_VERSION ?= v2.22.2
+GOCOV_VERSION ?= v1.2.1
+GOCOV_XML_VERSION ?= v1.1.0
 HADOLINT_VERSION ?= v2.12.0
 CONTAINER_STRUCTURE_TEST_VERSION ?= v1.19.3
 GIT_SEMVER_VERSION ?= v6.9.0
@@ -474,10 +496,26 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
+.PHONY: go-junit-report
+go-junit-report: $(GO_JUNIT_REPORT) ## Download go-junit-report locally if necessary.
+$(GO_JUNIT_REPORT): $(LOCALBIN)
+	$(call go-install-tool,$(GO_JUNIT_REPORT),github.com/jstemmer/go-junit-report/v2,$(GO_JUNIT_REPORT_VERSION))
+
+.PHONY: gocov
+gocov: $(GOCOV) ## Download gocov locally if necessary.
+$(GOCOV): $(LOCALBIN)
+	$(call go-install-tool,$(GOCOV),github.com/axw/gocov/gocov,$(GOCOV_VERSION))
+
+.PHONY: gocov-xml
+gocov-xml: $(GOCOV_XML) ## Download gocov-xml locally if necessary.
+$(GOCOV_XML): $(LOCALBIN)
+	$(call go-install-tool,$(GOCOV_XML),github.com/AlekSi/gocov-xml,$(GOCOV_XML_VERSION))
+
 .PHONY: helmify
 helmify: $(HELMIFY) ## Download helmify locally if necessary.
 $(HELMIFY): $(LOCALBIN)
 	$(call go-install-tool,$(HELMIFY),github.com/arttor/helmify/cmd/helmify,$(HELMIFY_VERSION))
+
 
 ##@ Utilities
 
