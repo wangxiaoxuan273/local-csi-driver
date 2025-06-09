@@ -226,7 +226,6 @@ func main() {
 
 	// Make sure certs are generated and valid if cert rotation is enabled.
 	log.Info("setting up cert rotation")
-	setupFinished := make(chan struct{})
 	if err := rotator.AddRotator(mgr, &rotator.CertRotator{
 		SecretKey: types.NamespacedName{
 			Namespace: namespace,
@@ -250,7 +249,7 @@ func main() {
 				Type: rotator.Mutating,
 			},
 		},
-		IsReady: setupFinished,
+		IsReady: make(chan struct{}), // We can't delay webhook startup since this is controlled by the manager.
 	}); err != nil {
 		log.Error(err, "unable to set up cert rotation")
 		os.Exit(1)
