@@ -539,8 +539,7 @@ cert-manager-uninstall: helm ## Uninstall cert-manager from the current cluster.
 kyverno: helm ## Install kyverno into the current cluster.
 	$(HELM) repo add kyverno https://kyverno.github.io/kyverno/
 	$(HELM) repo update
-	$(HELM) install kyverno kyverno/kyverno --namespace kyverno --create-namespace --wait --debug --atomic \
-		--values deploy/values/kyverno.yaml
+	$(HELM) install kyverno kyverno/kyverno --namespace kyverno --create-namespace --wait --debug --atomic
 
 .PHONY: kyverno-uninstall
 kyverno-uninstall: helm ## Uninstall kyverno from the current cluster.

@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
@@ -245,73 +244,6 @@ func UncommentCode(filename, target, prefix string) error {
 	// false positive
 	//nolint:gosec
 	return os.WriteFile(filename, out.Bytes(), 0644)
-}
-
-// FixupJunitReport removes fixes up the JUnit report file from Ginkgo for CloudTest
-// - Removes skipped/pending test cases
-// - Replaces brackets with parentheses because CloudTest is not handling brackets properly.
-func FixupJunitReport(xmlReportFile string) error {
-	data, err := os.ReadFile(xmlReportFile)
-	if err != nil {
-		return err
-	}
-
-	decoder := xml.NewDecoder(bytes.NewReader(data))
-	var buf bytes.Buffer
-	encoder := xml.NewEncoder(&buf)
-
-	for {
-		tok, err := decoder.Token()
-		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			return err
-		}
-
-		switch t := tok.(type) {
-		case xml.StartElement:
-			if t.Name.Local == "testcase" {
-				var status string
-				var newAttrs []xml.Attr
-				for _, attr := range t.Attr {
-					if attr.Name.Local == "status" {
-						status = attr.Value
-					}
-					if attr.Name.Local == "classname" {
-						continue
-					}
-					if attr.Name.Local == "name" {
-						attr.Value = strings.ReplaceAll(strings.ReplaceAll(attr.Value, "[", "("), "]", ")")
-					}
-					newAttrs = append(newAttrs, attr)
-				}
-				if status == "skipped" || status == "pending" {
-					// Skip this testcase
-					for {
-						tok, err = decoder.Token()
-						if err != nil || tok == nil {
-							break
-						}
-						if end, ok := tok.(xml.EndElement); ok && end.Name.Local == "testcase" {
-							break
-						}
-					}
-					continue
-				}
-				t.Attr = newAttrs
-				tok = t
-			}
-		}
-		if err := encoder.EncodeToken(tok); err != nil {
-			return fmt.Errorf("failed to encode token: %w", err)
-		}
-	}
-
-	if err := encoder.Flush(); err != nil {
-		return fmt.Errorf("failed to flush encoder: %w", err)
-	}
-	return os.WriteFile(xmlReportFile, buf.Bytes(), os.ModePerm)
 }
 
 // CollectSupportBundle runs the make get-support-bundle command with the

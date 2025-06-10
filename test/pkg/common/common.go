@@ -340,7 +340,6 @@ func PostReport(ctx SpecContext, r Report, cloudtestReport, summaryReport string
 	config := reporters.JunitReportConfig{
 		OmitTimelinesForSpecState: types.SpecStateSkipped | types.SpecStatePending,
 		OmitLeafNodeType:          true,
-		OmitSuiteSetupNodes:       true,
 	}
 
 	// Patch the report to skip flakey tests
@@ -349,8 +348,6 @@ func PostReport(ctx SpecContext, r Report, cloudtestReport, summaryReport string
 	By("generating path to absolute path: " + reportPath)
 	Expect(reporters.GenerateJUnitReportWithConfig(r, reportPath, config)).
 		To(Succeed(), "fail to generate junit report")
-	Expect(utils.FixupJunitReport(reportPath)).
-		To(Succeed(), "failed to fixup junit report for cloudtest")
 
 	if !kind.IsCluster() {
 		Expect(summaryReport).NotTo(BeEmpty(), "summary report path is empty")
