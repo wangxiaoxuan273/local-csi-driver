@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -62,27 +63,35 @@ var testConfigs = []testConfig{
 		testSuiteName: "lvm-annotation External E2E Test Suite",
 		setup: func(ctx context.Context) {
 			By("setting up installing kyverno")
-			cmd := exec.CommandContext(ctx, "make", "kyverno")
-			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "failed to install kyverno")
+			Eventually(func(g Gomega, ctx context.Context) {
+				cmd := exec.CommandContext(ctx, "make", "kyverno")
+				_, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "failed to install kyverno")
+			}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "failed to install kyverno")
 
 			DeferCleanup(func(ctx context.Context) {
 				By("cleaning up kyverno")
-				cmd = exec.CommandContext(ctx, "make", "kyverno-uninstall")
-				_, err = utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred(), "failed to cleanup kyverno")
+				Eventually(func(g Gomega, ctx context.Context) {
+					cmd := exec.CommandContext(ctx, "make", "kyverno")
+					_, err := utils.Run(cmd)
+					g.Expect(err).NotTo(HaveOccurred(), "failed to uninstall kyverno")
+				}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "failed to uninstall kyverno")
 			})
 
 			By("setting up installing kyverno policies")
-			cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", pvcAnnotator)
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "failed to install kyverno policies")
+			Eventually(func(g Gomega, ctx context.Context) {
+				cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", pvcAnnotator)
+				_, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "failed to install kyverno policies")
+			}).WithContext(ctx).Should(Succeed(), "failed to install kyverno policies")
 
 			DeferCleanup(func(ctx context.Context) {
 				By("cleaning up kyverno policies")
-				cmd = exec.CommandContext(ctx, "kubectl", "delete", "-f", pvcAnnotator, "--ignore-not-found", "--wait")
-				_, err = utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred(), "failed to cleanup kyverno policies")
+				Eventually(func(g Gomega, ctx context.Context) {
+					cmd := exec.CommandContext(ctx, "kubectl", "delete", "-f", pvcAnnotator, "--ignore-not-found", "--wait")
+					_, err := utils.Run(cmd)
+					g.Expect(err).NotTo(HaveOccurred(), "failed to cleanup kyverno policies")
+				}).WithContext(ctx).Should(Succeed(), "failed to cleanup kyverno policies")
 			})
 		},
 	},
