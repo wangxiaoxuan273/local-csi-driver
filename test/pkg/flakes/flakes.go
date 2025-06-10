@@ -17,7 +17,7 @@ var (
 	flakeyTestPatterns = []string{
 		"error dialing backend",
 		"an error on the server (\"unknown\") has prevented the request from succeeding",
-		"error: Internal error occurred: error sending request",
+		"Internal error occurred: error sending request",
 		"connection reset by peer",
 		"Internal error occurred: failed calling webhook \"mutate.kyverno.svc-fail\"",
 		"unexpected EOF",

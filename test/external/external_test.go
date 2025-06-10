@@ -72,7 +72,7 @@ var testConfigs = []testConfig{
 			DeferCleanup(func(ctx context.Context) {
 				By("cleaning up kyverno")
 				Eventually(func(g Gomega, ctx context.Context) {
-					cmd := exec.CommandContext(ctx, "make", "kyverno")
+					cmd := exec.CommandContext(ctx, "make", "kyverno-uninstall")
 					_, err := utils.Run(cmd)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to uninstall kyverno")
 				}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "failed to uninstall kyverno")
