@@ -29,7 +29,6 @@ ENVTEST_K8S_VERSION = 1.31.0
 
 TEST_OUTPUT ?= $(shell pwd)/test.xml
 TEST_COVER ?= $(shell pwd)/coverage.out
-SUMMARY_OUTPUT ?= $(shell pwd)/summary.md
 NO_COLOR ?= false
 FOCUS ?=
 LABEL_FILTER ?=
@@ -172,7 +171,7 @@ TAG=$(TAG) \
 REGISTRY=$(REGISTRY) \
 IMG=$(IMG) \
 $(GINKGO) -v -r $(3) --label-filter="$(1)$(if $(LABEL_FILTER), && ($(LABEL_FILTER)))" --focus="$(FOCUS)" --no-color="$(NO_COLOR)" --timeout="$(TEST_TIMEOUT)" "$(2)" -- \
-	--cloudtest-report=$(TEST_OUTPUT) --summary-report=$(SUMMARY_OUTPUT) --support-bundle-dir=$(SUPPORT_BUNDLE_OUTPUT_DIR) "$(4)"
+	--junit-report=$(TEST_OUTPUT) --support-bundle-dir=$(SUPPORT_BUNDLE_OUTPUT_DIR) "$(4)"
 endef
 
 .PHONY: test-container-structure
@@ -363,24 +362,6 @@ run-markdownlint: $(NODE)
 .PHONY: add-copyright
 add-copyright:
 	./hack/add_copyright.sh
-
-.PHONY: npm-login
-npm-login: $(NPM) ## Login to the Azure DevOps npm registry.
-	@echo "Logging in to Azure DevOps npm registry..." && \
-	echo "This will create a ~/.npmrc file with the authentication token." && \
-	echo "Please make sure to set the correct scopes for the token." && \
-	echo "You can generate a new token at https://msazure.visualstudio.com/_usersSettings/tokens" && \
-	echo "Make a PAT with with Packaging read & write scopes." && \
-	read -s -p "Enter PAT: " PAT && echo && \
-	PAT_BASE64=$$(echo -n "$$PAT" | base64 | tr -d '\n') && \
-	echo "; begin auth token" > ~/.npmrc && \
-	echo "//msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/registry/:username=msazure" >> ~/.npmrc && \
-	echo "//msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/registry/:_password=$$PAT_BASE64" >> ~/.npmrc && \
-	echo "//msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/registry/:email=npm requires email to be set but doesn't use the value" >> ~/.npmrc && \
-	echo "//msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/:username=msazure" >> ~/.npmrc && \
-	echo "//msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/:_password=$$PAT_BASE64" >> ~/.npmrc && \
-	echo "//msazure.pkgs.visualstudio.com/One/_packaging/One_PublicPackages/npm/:email=npm requires email to be set but doesn't use the value" >> ~/.npmrc && \
-	echo "; end auth token" >> ~/.npmrc
 
 .PHONY: single
 single: manifests kind ## Create a single node kind cluster.

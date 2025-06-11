@@ -25,14 +25,11 @@ const namespace = "cns-system"
 var (
 	// defaultKubeConfigPath is the default path to the kubeconfig file.
 	defaultKubeConfigPath = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	// cloudtestReport is the report file generated for consumption by CloudTest.
-	cloudtestReport = flag.String("cloudtest-report", "junit.xml", "Path to the cloudtest report")
+	// junitReport is the report file generated for consumption by test.
+	junitReport = flag.String("junit-report", "junit.xml", "Path to the test report")
 
 	// supportBundleDir is the directory where support bundles are written.
 	supportBundleDir = flag.String("support-bundle-dir", "support-bundles", "Path to write support-bundles")
-
-	// summaryReport is the path to the summary report.
-	summaryReport = flag.String("summary-report", "summary.md", "Path to write summary report")
 
 	// releaseName is the release name for the test.
 	releaseName = flag.String("release-name", "local-csi-driver", "Release name for the test")
@@ -75,5 +72,5 @@ var _ = AfterEach(func(ctx context.Context) {
 })
 
 var _ = ReportAfterSuite("e2e reporter", func(ctx SpecContext, r Report) {
-	common.PostReport(ctx, r, *cloudtestReport, *summaryReport)
+	common.PostReport(ctx, r, *junitReport)
 })

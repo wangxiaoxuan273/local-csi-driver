@@ -21,7 +21,6 @@ import (
 	"local-csi-driver/test/pkg/docker"
 	"local-csi-driver/test/pkg/flakes"
 	"local-csi-driver/test/pkg/kind"
-	"local-csi-driver/test/pkg/summary"
 	"local-csi-driver/test/pkg/utils"
 )
 
@@ -325,17 +324,17 @@ func Teardown(ctx context.Context, namespace string, supportBundleDir string) {
 }
 
 // PostReport generates the junit report for the test and copies it to the
-// cloudtest report path.
-func PostReport(ctx SpecContext, r Report, cloudtestReport, summaryReport string) {
+// specified path. It also patches the report to skip flaky tests.
+func PostReport(ctx SpecContext, r Report, testReport string) {
 	suiteConfig, _ := GinkgoConfiguration()
 	if suiteConfig.DryRun {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping report generation as this is a dry run\n")
 		return
 	}
-	By("generating cloudtest report")
-	Expect(cloudtestReport).NotTo(BeEmpty(), "cloudtest report path is empty")
-	reportPath, err := getArtifactPath(cloudtestReport)
-	Expect(err).NotTo(HaveOccurred(), "failed to get absolute path for cloudtest report")
+	By("generating test report")
+	Expect(testReport).NotTo(BeEmpty(), "test report path is empty")
+	reportPath, err := getArtifactPath(testReport)
+	Expect(err).NotTo(HaveOccurred(), "failed to get absolute path for test report")
 
 	config := reporters.JunitReportConfig{
 		OmitTimelinesForSpecState: types.SpecStateSkipped | types.SpecStatePending,
@@ -348,21 +347,6 @@ func PostReport(ctx SpecContext, r Report, cloudtestReport, summaryReport string
 	By("generating path to absolute path: " + reportPath)
 	Expect(reporters.GenerateJUnitReportWithConfig(r, reportPath, config)).
 		To(Succeed(), "fail to generate junit report")
-
-	if !kind.IsCluster() {
-		Expect(summaryReport).NotTo(BeEmpty(), "summary report path is empty")
-		summaryPath, err := getArtifactPath(summaryReport)
-		Expect(err).NotTo(HaveOccurred(), "failed to get absolute path for summary report")
-
-		By("Generating markdown report")
-		cmd := exec.CommandContext(ctx, "kubectl", "config", "current-context")
-		output, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to get current context")
-
-		clusterName := strings.TrimSpace(output)
-		Expect(clusterName).NotTo(BeEmpty(), "Failed to get cluster name")
-		Expect(summary.GenerateReport(r, clusterName, summaryPath)).To(Succeed(), "failed to generate markdown report")
-	}
 }
 
 func getArtifactPath(path string) (string, error) {
