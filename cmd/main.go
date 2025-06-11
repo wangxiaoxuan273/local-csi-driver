@@ -214,6 +214,8 @@ func main() {
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         true, // Required for cert rotation.
+		LeaderElectionID:       "local-csi-driver-leader-election",
 	})
 	if err != nil {
 		logAndExit(err, "unable to start manager")
@@ -226,6 +228,7 @@ func main() {
 
 	// Make sure certs are generated and valid if cert rotation is enabled.
 	log.Info("setting up cert rotation")
+	certSetupFinished := make(chan struct{})
 	if err := rotator.AddRotator(mgr, &rotator.CertRotator{
 		SecretKey: types.NamespacedName{
 			Namespace: namespace,
@@ -249,7 +252,7 @@ func main() {
 				Type: rotator.Mutating,
 			},
 		},
-		IsReady: make(chan struct{}), // We can't delay webhook startup since this is controlled by the manager.
+		IsReady: certSetupFinished,
 	}); err != nil {
 		log.Error(err, "unable to set up cert rotation")
 		os.Exit(1)
@@ -310,31 +313,37 @@ func main() {
 		logAndExit(err, "unable to add csi server to internal manager")
 	}
 
-	// Register webhooks.
-	if ptr.ToBool(cfg.EnforceEphemeralPVC) {
-		pvcHandler, err := pvc.NewHandler(volumeClient.GetDriverName(), mgr.GetClient(), mgr.GetScheme(), recorder)
-		if err != nil {
-			logAndExit(err, "unable to create pvc handler")
-		}
-		mgr.GetWebhookServer().Register("/pvc-create", &webhook.Admission{Handler: pvcHandler})
-	}
-
-	// When node affinity is removed from PVs, we ensure that the PV is bound to
-	// the correct node through the hyperconverged webhook.
-	if ptr.ToBool(cfg.EnforceHyperconvergedWithWebhook) {
-		hyperconvergedHandler, err := hyperconverged.NewHandler(namespace, mgr.GetClient(), mgr.GetScheme())
-		if err != nil {
-			logAndExit(err, "unable to create hyperconverged handler")
-		}
-		mgr.GetWebhookServer().Register("/mutate-hyperconverged-pods", &webhook.Admission{Handler: hyperconvergedHandler})
-	}
-
+	// Add the health endpoints to the manager.
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logAndExit(err, "unable to set up health check")
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		logAndExit(err, "unable to set up ready check")
 	}
+
+	// Once the cert rotator has finished, add the webhook handlers.
+	go func() {
+		<-certSetupFinished
+
+		// Register webhooks.
+		if ptr.ToBool(cfg.EnforceEphemeralPVC) {
+			pvcHandler, err := pvc.NewHandler(volumeClient.GetDriverName(), mgr.GetClient(), mgr.GetScheme(), recorder)
+			if err != nil {
+				logAndExit(err, "unable to create pvc handler")
+			}
+			mgr.GetWebhookServer().Register("/pvc-create", &webhook.Admission{Handler: pvcHandler})
+		}
+
+		// When node affinity is removed from PVs, we ensure that the PV is bound to
+		// the correct node through the hyperconverged webhook.
+		if ptr.ToBool(cfg.EnforceHyperconvergedWithWebhook) {
+			hyperconvergedHandler, err := hyperconverged.NewHandler(namespace, mgr.GetClient(), mgr.GetScheme())
+			if err != nil {
+				logAndExit(err, "unable to create hyperconverged handler")
+			}
+			mgr.GetWebhookServer().Register("/mutate-hyperconverged-pods", &webhook.Admission{Handler: hyperconvergedHandler})
+		}
+	}()
 
 	log.Info("starting manager")
 	span.AddEvent("starting manager")
