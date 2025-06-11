@@ -4,12 +4,10 @@
 
 
 import os
-import sys
 import re
 import shutil
 import time
 import argparse
-import subprocess
 import logging
 import asyncio
 import uuid
@@ -22,8 +20,7 @@ from dataclasses import dataclass
 # Constants for environment variables
 LOGGING_DIRECTORY_ENV = "LoggingDirectory"
 CUSTOM_COVERAGE_DIRECTORY_ENV = "CustomCoverageDirectory"
-CLOUDTEST_GROUP_EXECUTION_ID_ENV = "CloudTestGroupExecutionId"
-CLOUDTEST_SESSION_RETRY_COUNT_ENV = "CloudTestFlakyTestCaseRetryCount"
+TEST_RUN_ID_ENV = "TestRunId"
 REGISTRY_ENV = "REGISTRY"
 REPO_BASE_ENV = "REPO_BASE"
 TAG_ENV = "TAG"
@@ -31,23 +28,15 @@ ADDITIONAL_GINKGO_FLAGS_ENV = "ADDITIONAL_GINKGO_FLAGS"
 AKS_TEMPLATE_ENV = "AKS_TEMPLATE"
 AKS_LOCATION_ENV = "AKS_LOCATION"
 
-IMDS_URL = "http://169.254.169.254/metadata/instance?api-version=2021-02-01"
-
-# Constants for Azure subscription ID
-TEST_SUBSCRIPTION = "d64ddb0c-7399-4529-a2b6-037b33265372"
-
-
 # Constants for file names
 JUNIT_OUTPUT_FILE_NAME = "JUnit.xml"
 SUPPORT_BUNDLE_DIR_NAME = "support-bundles"
 COVERAGE_OUTPUT_FILE_NAME = "coverage.xml"
 REPORT_OUTPUT_FILE_NAME = "report.xml"
-SUMMARY_OUTPUT_FILE_NAME = "summary.md"
 
 # Constants for test environment variables
 TEST_OUTPUT_ENV = "TEST_OUTPUT"
 TEST_COVER_ENV = "TEST_COVER"
-SUMMARY_OUTPUT_ENV = "SUMMARY_OUTPUT"
 SKIP_BUILD_ENV = "SKIP_BUILD"
 SUPPORT_BUNDLE_OUTPUT_DIR_ENV = "SUPPORT_BUNDLE_OUTPUT_DIR"
 AKS_RESOURCE_GROUP_ENV = "AKS_RESOURCE_GROUP"
@@ -68,32 +57,20 @@ class EnvConfig:
             LOGGING_DIRECTORY_ENV, os.getcwd())
         self.custom_coverage_directory: str = os.getenv(
             CUSTOM_COVERAGE_DIRECTORY_ENV, os.getcwd())
-        self.cloudtest_id: str = os.getenv(
-            CLOUDTEST_GROUP_EXECUTION_ID_ENV, str(uuid.uuid4()))
+        self.run_id: str = os.getenv(
+            TEST_RUN_ID_ENV, str(uuid.uuid4()))
         self.registry: str = os.getenv(REGISTRY_ENV, "")
         self.tag: str = os.getenv(TAG_ENV, "")
         self.repo_base: str = os.getenv(REPO_BASE_ENV, "")
-        self.cloudtest_flaky_retry_count: str = os.getenv(
-            CLOUDTEST_SESSION_RETRY_COUNT_ENV, "")
 
     def __str__(self) -> str:
         return (
             f"EnvConfig(logging_directory={self.logging_directory}, "
             f"custom_coverage_directory={self.custom_coverage_directory}, "
-            f"cloudtest_id={self.cloudtest_id}, "
+            f"run_id={self.run_id}, "
             f"registry={self.registry}, "
             f"tag={self.tag}, "
             f"repo_base={self.repo_base})")
-
-    def is_retry_run(self) -> bool:
-        """
-        Check if the current run is a retry based on the
-        CloudTestFlakyTestCaseRetryCount environment variable.
-
-        Returns:
-            bool: True if it is a retry run, False otherwise.
-        """
-        return self.cloudtest_flaky_retry_count != ""
 
 
 # Configure logging
@@ -119,40 +96,7 @@ def move_existing_file(file_path: str) -> None:
         shutil.move(file_path, new_file)
 
 
-def check_imds_and_login() -> None:
-    """
-    Check if IMDS exists and log in to Azure using managed identity and ACR.
-    """
-    try:
-        subprocess.check_output(
-            ["curl", "-H", "Metadata:true", IMDS_URL],
-            stderr=subprocess.STDOUT
-        )
-        logging.info("IMDS exists, logging into Azure using managed identity:")
-        subprocess.check_call(
-            ["az", "login", "--identity"],
-            stderr=subprocess.STDOUT
-        )
-        subprocess.check_call(
-            ["az", "account", "set", "--subscription", TEST_SUBSCRIPTION],
-            stderr=subprocess.STDOUT
-        )
-
-    except subprocess.CalledProcessError:
-        logging.error(
-            "IMDS does not exist or failed to login using managed identity")
-        return
-    try:
-        subprocess.check_call(
-            ["az", "acr", "login", "--name", "localcsidriver"],
-            stderr=subprocess.STDOUT,
-        )
-    except subprocess.CalledProcessError:
-        logging.error("Failed to login to localcsidriver ACR account")
-        sys.exit(1)
-
-
-def prepare_directories(config: EnvConfig) -> Tuple[str, str, str, str]:
+def prepare_directories(config: EnvConfig) -> Tuple[str, str, str]:
     """
     Prepare the logging and coverage directories and move existing files.
 
@@ -161,15 +105,12 @@ def prepare_directories(config: EnvConfig) -> Tuple[str, str, str, str]:
         variables.
 
     Returns:
-        tuple: Paths for JUnit output file, summary output file, support bundle
+        tuple: Paths for JUnit output file, support bundle
         output directory, and coverage output file.
     """
     junit_output_file = os.path.join(
         config.logging_directory,
         JUNIT_OUTPUT_FILE_NAME)
-    summary_output_file = os.path.join(
-        config.logging_directory,
-        SUMMARY_OUTPUT_FILE_NAME)
     support_bundle_output_dir = os.path.join(
         config.logging_directory, SUPPORT_BUNDLE_DIR_NAME)
     coverage_output_file = os.path.join(
@@ -177,14 +118,12 @@ def prepare_directories(config: EnvConfig) -> Tuple[str, str, str, str]:
         COVERAGE_OUTPUT_FILE_NAME)
 
     logging.info(f"JUnit output file: {junit_output_file}")
-    logging.info(f"Summary output file: {summary_output_file}")
     logging.info(
         f"Support bundle output directory: {support_bundle_output_dir}")
     logging.info(f"Coverage output file: {coverage_output_file}")
 
     files_to_check = [
         junit_output_file,
-        summary_output_file,
         coverage_output_file,
         support_bundle_output_dir]
     for file_path in files_to_check:
@@ -192,7 +131,6 @@ def prepare_directories(config: EnvConfig) -> Tuple[str, str, str, str]:
 
     return (
         junit_output_file,
-        summary_output_file,
         support_bundle_output_dir,
         coverage_output_file,
     )
@@ -314,8 +252,8 @@ class AksCluster(Cluster):
                  elasticsan_count: int,
                  config: EnvConfig):
         self.config = config
-        if self.config.cloudtest_id == "":
-            raise ValueError("CloudTest session ID is not set")
+        if self.config.run_id == "":
+            raise ValueError("Test Run ID is not set")
         if cluster_template == "":
             raise ValueError("AKS template is not set")
         if elasticsan_count < 0:
@@ -323,7 +261,7 @@ class AksCluster(Cluster):
 
         self.cluster_template = cluster_template
         self.elasticsan_count = elasticsan_count
-        self.aks_resource_group = f"lcd-{self.config.cloudtest_id}"
+        self.aks_resource_group = f"lcd-{self.config.run_id}"
 
     async def setup(self) -> None:
         """
@@ -453,7 +391,7 @@ class AksCluster(Cluster):
         Returns:
             str: The AKS cluster resource group.
         """
-        return f"lcd-{self.config.cloudtest_id}"
+        return f"lcd-{self.config.run_id}"
 
 
 class NoCluster(Cluster):
@@ -591,10 +529,8 @@ async def main() -> None:
 
     logging.info(f"environment variables: {config}")
 
-    junit_file, summary_output_file, support_dir, cover_out_file = \
+    junit_file, support_dir, cover_out_file = \
         prepare_directories(config)
-
-    check_imds_and_login()
 
     cluster = create_cluster(args, config)
 
@@ -611,7 +547,6 @@ async def main() -> None:
         **os.environ,
         TEST_OUTPUT_ENV: REPORT_OUTPUT_FILE_NAME,
         TEST_COVER_ENV: COVERAGE_OUTPUT_FILE_NAME,
-        SUMMARY_OUTPUT_ENV: SUMMARY_OUTPUT_FILE_NAME,
         SKIP_BUILD_ENV: "true",
         SKIP_CREATE_CLUSTER_ENV: "true",
         SKIP_SOCAT_ROLLBACK: "true",
@@ -625,7 +560,6 @@ async def main() -> None:
     files_to_copy = {
         REPORT_OUTPUT_FILE_NAME: junit_file,
         COVERAGE_OUTPUT_FILE_NAME: cover_out_file,
-        SUMMARY_OUTPUT_FILE_NAME: summary_output_file,
         SUPPORT_BUNDLE_DIR_NAME: support_dir,
     }
 

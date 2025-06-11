@@ -201,12 +201,12 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup CloudTestGroupExecutionId
+      - name: Setup TestRunId
         run: |
           TEST_ID=$(echo "${{ matrix.test.name }}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
-          CLOUDTEST_ID="${{ github.run_id }}-${TEST_ID}-${{ github.run_attempt }}"
-          echo "CloudTestGroupExecutionId=${CLOUDTEST_ID}" >> "$GITHUB_ENV"
-          echo "Generated CloudTestGroupExecutionId: ${CLOUDTEST_ID}"
+          TEST_RUN_ID="${{ github.run_id }}-${TEST_ID}-${{ github.run_attempt }}"
+          echo "TestRunId=${TEST_RUN_ID}" >> "$GITHUB_ENV"
+          echo "Generated TestRunId: ${TEST_RUN_ID}"
 
       - name: Run ${{ matrix.test.name }}
         run: |
@@ -219,11 +219,11 @@ jobs:
       - name: Cleanup cluster
         if: ${{ always() && matrix.test.cluster_type == 'aks' }}
         run: |
-          if [[ -z "${{ env.CloudTestGroupExecutionId }}" || "${{ env.CloudTestGroupExecutionId }}" =~ ^[[:space:]]*$ ]]; then
-            echo "Warning: CloudTestGroupExecutionId is empty or whitespace. Skipping cleanup."
+          if [[ -z "${{ env.TestRunId }}" || "${{ env.TestRunId }}" =~ ^[[:space:]]*$ ]]; then
+            echo "Warning: TestRunId is empty or whitespace. Skipping cleanup."
             exit 0
           fi
-          RG="lcd-${{ env.CloudTestGroupExecutionId }}"
+          RG="lcd-${{ env.TestRunId }}"
           ./deploy/scripts/clean.sh --resource-group "$RG"
 
       - name: Sanitize artifacts
@@ -251,7 +251,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: test-artifacts-${{ env.CloudTestGroupExecutionId }}
+          name: test-artifacts-${{ env.TestRunId }}
           path: |
             ./support-bundles
             ./JUnit.xml

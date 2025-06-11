@@ -43,5 +43,4 @@ support-bundles-*/**
 
 # ignore dist directory
 dist/**
-summary.md
 config/controller/generated_config.yaml

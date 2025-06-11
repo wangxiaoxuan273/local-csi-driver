@@ -35,14 +35,11 @@ var (
 	// socatPatch is the path to the socat patch file.
 	socatPatch = filepath.Join("test", "sanity", "fixtures", "socat-patch.yaml")
 
-	// cloudtestReport is the report file generated for consumption by CloudTest.
-	cloudtestReport = flag.String("cloudtest-report", "junit.xml", "Path to the cloudtest report")
+	// junitReport is the report file generated for consumption by test framework.
+	junitReport = flag.String("junit-report", "junit.xml", "Path to the junit report")
 
 	// supportBundleDir is the directory where support bundles are written.
 	supportBundleDir = flag.String("support-bundle-dir", "support-bundles", "Path to write support-bundles")
-
-	// summaryReport is the path to the summary report.
-	summaryReport = flag.String("summary-report", "summary.md", "Path to write summary report")
 
 	// skipSocatRollback is a flag to skip the rollback of the socat patch.
 	// This is useful for debugging the socat patch in the test so we keep the
@@ -131,7 +128,7 @@ var _ = AfterEach(func(ctx context.Context) {
 })
 
 var _ = ReportAfterSuite("e2e reporter", func(ctx SpecContext, r Report) {
-	common.PostReport(ctx, r, *cloudtestReport, *summaryReport)
+	common.PostReport(ctx, r, *junitReport)
 })
 
 var _ = Describe("CSI sanity", Label("sanity"), func() {
