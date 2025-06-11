@@ -90,7 +90,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ needs.vars.outputs.TAG }}
+          tags: |
+             ${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ needs.vars.outputs.TAG }}
+             ${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -132,9 +134,16 @@ jobs:
 
       - name: Build and push Helm chart
         run: |
-          make helm-build REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG=${{ needs.vars.outputs.TAG }}
+          TAGS=()
+          TAGS+=("${{ needs.vars.outputs.TAG }}")
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAGS+=("${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest")
+          fi
           make helm-login REGISTRY=${{ env.REGISTRY }}
-          make helm-push REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG=${{ needs.vars.outputs.TAG }}
+          for tag in "${TAGS[@]}"; do
+            make helm-build REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG="$tag"
+            make helm-push REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG="$tag"
+          done
 
   e2e-test:
     needs: [build-docker, build-helm, vars]
