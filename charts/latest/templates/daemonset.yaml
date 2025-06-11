@@ -50,8 +50,7 @@ spec:
               fieldPath: spec.nodeName
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.node.driver.image.repository }}:{{ .Values.node.driver.image.tag
-          | default .Chart.AppVersion }}
+        image: {{ .Values.node.driver.image.repository }}:{{ .Values.node.driver.image.tag | default .Chart.Version }}
         imagePullPolicy: {{ .Values.node.driver.imagePullPolicy }}
         livenessProbe:
           httpGet:

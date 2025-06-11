@@ -228,6 +228,14 @@ define docker-build
 		-f $(1) .
 endef
 
+.PHONY: docker-pull
+docker-pull: ## Pull the docker image.
+	$(call docker-pull,${IMG})
+
+define docker-pull
+	docker pull $(1)
+endef
+
 .PHONY: docker-load
 docker-load: ## Load the docker image into the kind cluster.
 	$(call docker-load,${IMG})
@@ -241,14 +249,11 @@ docker-lint: hadolint
 	$(HADOLINT) Dockerfile
 
 .PHONY: helm-build
-helm-build: build-driver helm helmify manifests generate ## Generate a consolidated Helm chart with CRDs and deployment.
-	cat dist/install.yaml | \
-		$(HELMIFY) -v \
-		-original-name \
-		dist/chart && \
-		./hack/fix-helm-chart.sh --chart dist/chart --version $(TAG)
-	$(HELM) package --dependency-update dist/chart -d dist --version $(TAG)
-
+helm-build: helm manifests generate ## Generate a consolidated Helm chart with CRDs and deployment.
+	cp charts/latest/Chart.yaml charts/latest/Chart.yaml.bak
+	./hack/fix-helm-chart.sh --chart charts/latest --version $(TAG)
+	$(HELM) package --dependency-update charts/latest -d dist --version $(TAG)
+	mv charts/latest/Chart.yaml.bak charts/latest/Chart.yaml
 
 # Helm login
 .PHONY: helm-login
@@ -287,13 +292,15 @@ arc-uninstall: ## Uninstall the Azure Kubernetes Service extension.
 
 
 HELM_ARGS ?=
-.PHONY: helm-install-local
-helm-install-local: helm helm-build ## Install the Helm chart from the local build into the K8s cluster specified in ~/.kube/config.
-	$(HELM) install local-csi-driver dist/chart --namespace cns-system --create-namespace --debug --wait --atomic $(HELM_ARGS)
-
-.PHONY: helm-install-local
+.PHONY: helm
 helm-install: helm ## Install the Helm chart from REGISTRY into the K8s cluster specified in ~/.kube/config.
-	$(HELM) install local-csi-driver oci://$(CHART_IMG) --version $(TAG) --namespace cns-system --create-namespace --debug --wait --atomic $(HELM_ARGS)
+	$(HELM) install local-csi-driver oci://$(CHART_IMG) \
+		--namespace cns-system \
+		--version $(TAG) \
+		--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
+		--set node.driver.image.tag=$(TAG) \
+		--create-namespace \
+		--debug --wait --atomic $(HELM_ARGS)
 
 .PHONY: helm-show-values
 helm-show-values: helm ## Show the default values of the Helm chart.
@@ -306,18 +313,12 @@ uninstall-helm: helm ## Uninstall the Helm chart from the K8s cluster specified 
 .PHONY: deploy
 deploy: manifests helm ## Deploy to the K8s cluster specified in ~/.kube/config.
 	$(HELM) install local-csi-driver charts/latest \
-	--namespace cns-system \
-	--version $(TAG) \
-	--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
-	--set node.driver.image.tag=$(TAG) \
-	--create-namespace \
-	--debug --wait --atomic $(HELM_ARGS)
-
-.PHONY: build-driver
-build-driver: manifests generate kustomize ## Generate a consolidated install YAML.
-	mkdir -p dist
-	(cd config/csi-driver && $(KUSTOMIZE) edit set image driver=${IMG})
-	$(KUSTOMIZE) build config/default > dist/install.yaml
+		--namespace cns-system \
+		--version $(TAG) \
+		--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
+		--set node.driver.image.tag=$(TAG) \
+		--create-namespace \
+		--debug --wait --atomic $(HELM_ARGS)
 
 .PHONY: undeploy
 undeploy: uninstall-helm ## Undeploy from the K8s cluster specified in ~/.kube/config.
@@ -421,7 +422,6 @@ HADOLINT ?= $(LOCALBIN)/hadolint
 CONTAINER_STRUCTURE_TEST ?= $(LOCALBIN)/container-structure-test
 SUPPORT_BUNDLE ?= $(LOCALBIN)/support-bundle
 BICEP ?= $(LOCALBIN)/bicep
-HELMIFY ?= $(LOCALBIN)/helmify
 HELM ?= $(LOCALBIN)/helm
 
 ## Tool Versions
@@ -432,10 +432,9 @@ ENVTEST_VERSION ?= release-0.19
 KIND_VERSION ?= v0.25.0
 GOLANGCI_LINT_VERSION ?= v2.1.6
 GO_JUNIT_REPORT_VERSION ?= v2.1.0
-CERT_MANAGER_VERSION ?= 1.12.12-5
 PROMETHEUS_VERSION ?= v0.77.1
 JAEGER_VERSION ?= v1.62.0
-GINKGO_VERSION ?= v2.22.2
+GINKGO_VERSION ?= v2.23.3
 GOCOV_VERSION ?= v1.2.1
 GOCOV_XML_VERSION ?= v1.1.0
 HADOLINT_VERSION ?= v2.12.0
@@ -443,7 +442,6 @@ CONTAINER_STRUCTURE_TEST_VERSION ?= v1.19.3
 GIT_SEMVER_VERSION ?= v6.9.0
 SUPPORT_BUNDLE_VERSION ?= v0.114.0
 BICEP_VERSION ?= v0.32.4
-HELMIFY_VERSION ?= v0.4.17
 HELM_VERSION ?= v3.16.4
 MARKDOWNLINT_CLI_VERSION ?= v0.44.0
 
@@ -494,29 +492,11 @@ gocov-xml: $(GOCOV_XML) ## Download gocov-xml locally if necessary.
 $(GOCOV_XML): $(LOCALBIN)
 	$(call go-install-tool,$(GOCOV_XML),github.com/AlekSi/gocov-xml,$(GOCOV_XML_VERSION))
 
-.PHONY: helmify
-helmify: $(HELMIFY) ## Download helmify locally if necessary.
-$(HELMIFY): $(LOCALBIN)
-	$(call go-install-tool,$(HELMIFY),github.com/arttor/helmify/cmd/helmify,$(HELMIFY_VERSION))
-
-
 ##@ Utilities
 
 set-docker-pipeline-variables: # Echos variables used to pass information to docker build pipeline.
 	@echo "##vso[task.setvariable variable=build_date;isOutput=true]$$( date -u +%Y-%m-%dT%H:%M:%SZ )"
 	@echo "##vso[task.setvariable variable=git_revision;isOutput=true]$$( git rev-parse HEAD )"
-
-
-CERT_MANAGER_CHART="oci://mcr.microsoft.com/azurelinux/helm/cert-manager"
-.PHONY: cert-manager
-cert-manager: helm ## Install cert-manager into the current cluster.
-	$(HELM) install cert-manager $(CERT_MANAGER_CHART) --version $(CERT_MANAGER_VERSION) \
-		--set cert-manager.installCRDs=true --namespace cert-manager --create-namespace --wait --debug --atomic
-
-.PHONY: cert-manager-uninstall
-cert-manager-uninstall: helm ## Uninstall cert-manager from the current cluster.
-	$(HELM) uninstall cert-manager --namespace cert-manager --wait --debug --ignore-not-found
-
 
 .PHONY: kyverno
 kyverno: helm ## Install kyverno into the current cluster.
