@@ -14,7 +14,6 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 
-	"github.com/gotidy/ptr"
 	"github.com/open-policy-agent/cert-controller/pkg/rotator"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -98,14 +97,14 @@ func main() {
 		"The name of the pod this agent is running on.")
 	flag.StringVar(&namespace, "namespace", "default",
 		"The namespace to use for creating objects.")
-	flag.StringVar(&webhookSvcName, "webhook-service-name", "webhook-service",
-		"The name of the service used by the webhook server.")
+	flag.StringVar(&webhookSvcName, "webhook-service-name", "",
+		"The name of the service used by the webhook server. Must be set to enable webhooks.")
 	flag.StringVar(&ephemeralCreateWebhookConfig, "ephemeral-webhook-config", "",
-		"The name of the ephemeral webhook config.")
+		"The name of the ephemeral webhook config. Must be set to enable the webhook.")
 	flag.StringVar(&hyperconvergedWebhookConfig, "hyperconverged-webhook-config", "",
-		"The name of the hyperconverged webhook config.")
-	flag.StringVar(&certSecretName, "certificate-secret-name", "webhook-server-cert",
-		"The name of the secret used to store the certificates.")
+		"The name of the hyperconverged webhook config. Must be set to enable the webhook.")
+	flag.StringVar(&certSecretName, "certificate-secret-name", "",
+		"The name of the secret used to store the certificates. Must be set to enable webhooks.")
 	flag.StringVar(&configFile, "config", "",
 		"The controller will load its initial configuration from this file. "+
 			"Omit this flag to use the default configuration values.")
@@ -256,6 +255,12 @@ func main() {
 
 	certSetupFinished := make(chan struct{})
 	if len(webhooks) > 0 {
+		if certSecretName == "" {
+			logAndExit(fmt.Errorf("certificate secret name not set"), "certificate secret name must be set when webhooks are enabled")
+		}
+		if webhookSvcName == "" {
+			logAndExit(fmt.Errorf("webhook service name must be set when webhooks are enabled"), "webhook service name must be set")
+		}
 		log.Info("setting up cert rotation")
 		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
 			SecretKey: types.NamespacedName{
@@ -327,7 +332,9 @@ func main() {
 	}
 
 	// Create the CSI server.
-	csiServer, err := server.NewCombined(csiAddr, driver.NewCombined(nodeName, volumeClient, mgr.GetClient(), ptr.ToBool(cfg.EnforceHyperconvergedWithWebhook), recorder, tp), t)
+	removePvNodeAffinity := ephemeralCreateWebhookConfig != ""
+
+	csiServer, err := server.NewCombined(csiAddr, driver.NewCombined(nodeName, volumeClient, mgr.GetClient(), removePvNodeAffinity, recorder, tp), t)
 	if err != nil {
 		logAndExit(err, "unable to create csi server")
 	}

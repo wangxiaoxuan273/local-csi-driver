@@ -369,20 +369,6 @@ func CollectSuiteSupportBundle(ctx context.Context, supportBundleDir string) {
 	}
 }
 
-// CollectSuiteSupportBundle collects the support bundle for the suiteif the
-// support bundle collection is not skipped.
-func CollectSuiteSupportBundle(ctx context.Context, supportBundleDir string) {
-	if !skipSupportBundle {
-		By("Collecting support bundle for the suite")
-		supportBundlePath := filepath.Join(supportBundleDir, "suite.tar.gz")
-
-		_, _ = fmt.Fprintf(GinkgoWriter, "Collecting support bundle for suite to %s\n", supportBundlePath)
-		output, err := utils.CollectSupportBundle(ctx, supportBundlePath, startTime)
-		Expect(err).NotTo(HaveOccurred(), "Failed to collect support bundle: %s", output)
-	}
-
-}
-
 // VerifyDriverUp validates that the node pod is running as expected.
 func VerifyDriverUp(ctx context.Context, namespace string) {
 	By("validating that the node pod is running as expected")
