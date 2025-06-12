@@ -3,25 +3,53 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 1
+      interval: "daily"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
     commit-message:
-      prefix: "chore"
+      prefix: "ci"
+      include: "scope"
 
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: daily
-    open-pull-requests-limit: 1
+      interval: "daily"
+    groups:
+      docker:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "build"
+      include: "scope"
 
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: daily
-    open-pull-requests-limit: 2
+      interval: "daily"
+    groups:
+      gomod-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+      include: "scope"
+
 
   - package-ecosystem: pip
     directory: /.github/workflows
     schedule:
-      interval: daily
+      interval: "daily"
+    groups:
+      pip:
+        patterns:
+          - "*"
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: "build"
+      include: "scope"
