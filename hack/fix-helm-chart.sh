@@ -3,11 +3,10 @@
 # Licensed under the MIT License.
 
 
-# This script is used to patch the output of helmify to make it work with our deployment.
-# Helmify adds annotations to the issuer and cert to install them after helm install.
-# However, our deployment relies on a secret created from these CRs being applied. To
-# fix this, we remove the annotation and install the cert-manager CRD as part of our helm
-# chart.
+# This script is used to patch the helm chart to ensure that the Chart.yaml file
+# is created with the correct version.
+#
+# Usage: ./hack/fix-helm-chart.sh --chart <chart-directory> --version <version>
 
 set -eou pipefail
 CHART=""
@@ -26,14 +25,6 @@ if [[ -z "$CHART" || -z "$TAG" ]]; then
     echo "Usage: $0 --chart <chart-directory> --version <version>"
     exit 1
 fi
-
-find "$CHART" -name 'serving-cert.yaml' | while read -r file; do
-    if grep -q 'csi-local-selfsigned-issuer' "$file"; then
-        echo "Patching $file"
-        sed -i 's/csi-local-selfsigned-issuer/{{ include "chart.fullname" . }}-selfsigned-issuer/g' "$file"
-    fi
-done
-
 
 cat <<EOF > "$CHART/Chart.yaml"
 # Default values for local-csi-driver.

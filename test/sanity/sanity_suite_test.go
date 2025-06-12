@@ -80,7 +80,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	By("Installing csi driver and other required components")
 	common.Setup(ctx, namespace)
 	DeferCleanup(func(ctx context.Context) {
-		common.Teardown(ctx, namespace, *supportBundleDir)
+		common.Teardown(ctx, namespace)
 	})
 
 	By("Applying socat patch to node and controller")
@@ -128,6 +128,7 @@ var _ = AfterEach(func(ctx context.Context) {
 })
 
 var _ = ReportAfterSuite("e2e reporter", func(ctx SpecContext, r Report) {
+	common.CollectSuiteSupportBundle(ctx, *supportBundleDir)
 	common.PostReport(ctx, r, *junitReport)
 })
 

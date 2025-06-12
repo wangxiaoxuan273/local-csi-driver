@@ -222,7 +222,6 @@ jobs:
           python .github/workflows/scripts/run_tests.py \
             --command "make ${{ matrix.test.command }} REGISTRY=${{ env.REGISTRY }} REPO_BASE=${{ env.REPO_BASE }} TAG=${{ needs.vars.outputs.TAG }}" \
             --cluster-type ${{ matrix.test.cluster_type }} \
-            ${{ matrix.test.cluster_type == 'aks' && '--run-dry-run' || '' }} \
             ${{ matrix.test.aks_template && format('--aks-template {0}', matrix.test.aks_template) || '' }}
 
       - name: Cleanup cluster

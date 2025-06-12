@@ -82,8 +82,9 @@ node:
         - SYS_ADMIN
       privileged: true
     image:
-      repository: mcr.microsoft.com/oss/local-csi-driver/driver
-      tag: latest
+      repository: localcsidriver.azurecr.io/local-csi-driver/driver
+      # When unset, uses the chart version as the tag.
+      tag:
     imagePullPolicy: Always
     resources:
       limits:

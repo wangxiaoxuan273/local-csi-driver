@@ -16,6 +16,7 @@ Dockerfile.cross
 # Output of unit test and go-junit-report
 report.xml
 JUnit.xml
+summary.md
 
 # Go workspace file
 go.work

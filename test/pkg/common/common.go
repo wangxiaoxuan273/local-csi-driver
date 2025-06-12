@@ -109,6 +109,8 @@ func Setup(ctx context.Context, namespace string) {
 
 	if !skipBuild {
 		tasks = append(tasks, makeDockerImage)
+		tasks = append(tasks, pullDockerImage)
+		tasks = append(tasks, makeHelmChart)
 	}
 	if !isKindClusterCreated && createCluster {
 		tasks = append(tasks, createKindCluster)
@@ -263,16 +265,7 @@ func Setup(ctx context.Context, namespace string) {
 }
 
 // Teardown undeploys the csi driver components and cleans up the cluster.
-func Teardown(ctx context.Context, namespace string, supportBundleDir string) {
-
-	if !skipSupportBundle {
-		By("collecting support bundle")
-		supportBundlePath := filepath.Join(supportBundleDir, "suite.tar.gz")
-		Eventually(func(g Gomega, ctx context.Context) {
-			output, err := utils.CollectSupportBundle(ctx, supportBundlePath, startTime)
-			g.Expect(err).NotTo(HaveOccurred(), "Failed to collect support bundle: %s\n", output)
-		}).WithContext(ctx).Should(Succeed(), "Failed to collect support bundle")
-	}
+func Teardown(ctx context.Context, namespace string) {
 
 	if skipUninstall {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping uninstall...\n")
@@ -391,6 +384,39 @@ func makeDockerImage(ctx context.Context) error {
 	return nil
 }
 
+// pullDockerImage pulls the docker image.
+//
+// Pulling the image is needed since buildx pushes the image to the registry,
+// but if the image is not present locally it will fail to load the image.
+func pullDockerImage(ctx context.Context) error {
+	By("pulling the controller image")
+	start := time.Now()
+	defer func() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "docker image pulled in %v\n", time.Since(start))
+	}()
+	cmd := exec.CommandContext(ctx, "make", "docker-pull", fmt.Sprintf("IMG=%s", image))
+	_, err := utils.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to pull the docker image: %v", err)
+	}
+	return nil
+}
+
+// makeHelmChart builds the helm chart.
+func makeHelmChart(ctx context.Context) error {
+	By("building the helm chart")
+	start := time.Now()
+	defer func() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "helm chart built in %v\n", time.Since(start))
+	}()
+	cmd := exec.CommandContext(ctx, "make", "helm-build", fmt.Sprintf("IMG=%s", image))
+	_, err := utils.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to build the helm chart: %v", err)
+	}
+	return nil
+}
+
 // CollectSupportBundle collects the support bundle for the test if the test
 // failed and support bundle collection is not skipped.
 func CollectSupportBundle(ctx context.Context, supportBundleDir string) {
@@ -399,11 +425,23 @@ func CollectSupportBundle(ctx context.Context, supportBundleDir string) {
 		testFilePath := filePathRegex.ReplaceAllString(CurrentSpecReport().FullText(), "_") + ".tar.gz"
 		supportBundlePath := filepath.Join(supportBundleDir, testFilePath)
 
-		_, _ = fmt.Fprintf(GinkgoWriter, "Collecting support bundle for to %s\n", supportBundlePath)
+		_, _ = fmt.Fprintf(GinkgoWriter, "Collecting support bundle for failed test to %s\n", supportBundlePath)
 		output, err := utils.CollectSupportBundle(ctx, supportBundlePath, CurrentSpecReport().StartTime)
 		Expect(err).NotTo(HaveOccurred(), "Failed to collect support bundle: %s", output)
 	}
+}
 
+// CollectSuiteSupportBundle collects the support bundle for the suite if the
+// support bundle collection is not skipped.
+func CollectSuiteSupportBundle(ctx context.Context, supportBundleDir string) {
+	if !skipSupportBundle {
+		By("Collecting support bundle for the suite")
+		supportBundlePath := filepath.Join(supportBundleDir, "suite.tar.gz")
+
+		_, _ = fmt.Fprintf(GinkgoWriter, "Collecting support bundle for suite to %s\n", supportBundlePath)
+		output, err := utils.CollectSupportBundle(ctx, supportBundlePath, startTime)
+		Expect(err).NotTo(HaveOccurred(), "Failed to collect support bundle: %s", output)
+	}
 }
 
 // VerifyDriverUp validates that the node pod is running as expected.

@@ -63,7 +63,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 })
 
 var _ = AfterSuite(func(ctx context.Context) {
-	common.Teardown(ctx, namespace, *supportBundleDir)
+	common.Teardown(ctx, namespace)
 })
 
 var _ = AfterEach(func(ctx context.Context) {
@@ -72,5 +72,6 @@ var _ = AfterEach(func(ctx context.Context) {
 })
 
 var _ = ReportAfterSuite("e2e reporter", func(ctx SpecContext, r Report) {
+	common.CollectSuiteSupportBundle(ctx, *supportBundleDir)
 	common.PostReport(ctx, r, *junitReport)
 })
