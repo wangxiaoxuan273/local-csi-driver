@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: webhook-server-cert
+  name: {{ include "chart.fullname" . }}-webhook-server-cert
   labels:
     app.kubernetes.io/component: webhook
   {{- include "chart.labels" . | nindent 4 }}

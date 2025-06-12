@@ -71,14 +71,18 @@ func main() {
 	var nodeName string
 	var podName string
 	var namespace string
-	var certSecretName string
 	var webhookSvcName string
+	var ephemeralCreateWebhookConfig string
+	var hyperconvergedWebhookConfig string
+	var certSecretName string
 	var configFile string
 	var csiAddr string
 	var metricsAddr string
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableLeaderElection bool
+	var leaderElectionID string
 	var workers int
 	var apiQPS int
 	var apiBurst int
@@ -94,10 +98,14 @@ func main() {
 		"The name of the pod this agent is running on.")
 	flag.StringVar(&namespace, "namespace", "default",
 		"The namespace to use for creating objects.")
-	flag.StringVar(&certSecretName, "certificate-secret-name", "webhook-server-cert",
-		"The name of the secret used to store the certificates.")
 	flag.StringVar(&webhookSvcName, "webhook-service-name", "webhook-service",
 		"The name of the service used by the webhook server.")
+	flag.StringVar(&ephemeralCreateWebhookConfig, "ephemeral-webhook-config", "",
+		"The name of the ephemeral webhook config.")
+	flag.StringVar(&hyperconvergedWebhookConfig, "hyperconverged-webhook-config", "",
+		"The name of the hyperconverged webhook config.")
+	flag.StringVar(&certSecretName, "certificate-secret-name", "webhook-server-cert",
+		"The name of the secret used to store the certificates.")
 	flag.StringVar(&configFile, "config", "",
 		"The controller will load its initial configuration from this file. "+
 			"Omit this flag to use the default configuration values.")
@@ -110,6 +118,10 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election. Required when webhooks are enabled.")
+	flag.StringVar(&leaderElectionID, "leader-election-id", "local-csi-driver-leader-election",
+		"The ID used for leader election.")
 	flag.IntVar(&workers, "worker-threads", 10,
 		"Number of worker threads per controller, in other words nr. of simultaneous CSI calls.")
 	flag.IntVar(&apiQPS, "kube-api-qps", 20,
@@ -123,7 +135,8 @@ func main() {
 	flag.StringVar(&traceServiceID, "trace-service-id", "",
 		"The service id to set in traces that identifies this service instance.")
 	flag.BoolVar(&printVersionAndExit, "version", false, "Print version and exit")
-	flag.BoolVar(&eventRecorderEnabled, "event-recorder-enabled", true, "If enabled, the driver will use the event recorder to record events. This is useful for debugging and monitoring purposes.")
+	flag.BoolVar(&eventRecorderEnabled, "event-recorder-enabled", true,
+		"If enabled, the driver will use the event recorder to record events. This is useful for debugging and monitoring purposes.")
 
 	// Initialize logger flagsconfig.
 	logConfig := textlogger.NewConfig(textlogger.VerbosityFlagName("v"))
@@ -214,8 +227,8 @@ func main() {
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         true, // Required for cert rotation.
-		LeaderElectionID:       "local-csi-driver-leader-election",
+		LeaderElection:         enableLeaderElection, // Required for cert rotation.
+		LeaderElectionID:       leaderElectionID,
 	})
 	if err != nil {
 		logAndExit(err, "unable to start manager")
@@ -226,36 +239,45 @@ func main() {
 		logAndExit(err, "unable to add telemetry to internal manager")
 	}
 
-	// Make sure certs are generated and valid if cert rotation is enabled.
-	log.Info("setting up cert rotation")
+	// Make sure certs are generated and valid if webhooks are enabled.
+	webhooks := []rotator.WebhookInfo{}
+	if ephemeralCreateWebhookConfig != "" {
+		webhooks = append(webhooks, rotator.WebhookInfo{
+			Name: ephemeralCreateWebhookConfig,
+			Type: rotator.Validating,
+		})
+	}
+	if hyperconvergedWebhookConfig != "" {
+		webhooks = append(webhooks, rotator.WebhookInfo{
+			Name: hyperconvergedWebhookConfig,
+			Type: rotator.Mutating,
+		})
+	}
+
 	certSetupFinished := make(chan struct{})
-	if err := rotator.AddRotator(mgr, &rotator.CertRotator{
-		SecretKey: types.NamespacedName{
-			Namespace: namespace,
-			Name:      certSecretName,
-		},
-		CertDir:        "/tmp/k8s-webhook-server/serving-certs",
-		CAName:         "local-csi-ca",
-		CAOrganization: "Microsoft",
-		DNSName:        fmt.Sprintf("%s.%s.svc", webhookSvcName, namespace),
-		ExtraDNSNames: []string{
-			fmt.Sprintf("%s.%s.svc.cluster.local", webhookSvcName, namespace),
-			fmt.Sprintf("%s.%s", webhookSvcName, namespace),
-		},
-		Webhooks: []rotator.WebhookInfo{
-			{
-				Name: "local-csi-driver-pvc-create-webhook",
-				Type: rotator.Validating,
+	if len(webhooks) > 0 {
+		log.Info("setting up cert rotation")
+		if err := rotator.AddRotator(mgr, &rotator.CertRotator{
+			SecretKey: types.NamespacedName{
+				Namespace: namespace,
+				Name:      certSecretName,
 			},
-			{
-				Name: "local-csi-driver-hyperconverged-webhook",
-				Type: rotator.Mutating,
+			CertDir:        "/tmp/k8s-webhook-server/serving-certs",
+			CAName:         "local-csi-ca",
+			CAOrganization: "Local CSI Driver",
+			DNSName:        fmt.Sprintf("%s.%s.svc", webhookSvcName, namespace),
+			ExtraDNSNames: []string{
+				fmt.Sprintf("%s.%s.svc.cluster.local", webhookSvcName, namespace),
+				fmt.Sprintf("%s.%s", webhookSvcName, namespace),
 			},
-		},
-		IsReady: certSetupFinished,
-	}); err != nil {
-		log.Error(err, "unable to set up cert rotation")
-		os.Exit(1)
+			Webhooks: webhooks,
+			IsReady:  certSetupFinished,
+		}); err != nil {
+			logAndExit(err, "unable to set up cert rotation")
+		}
+	} else {
+		log.Info("no webhooks configured, skipping cert rotation setup")
+		close(certSetupFinished)
 	}
 
 	// Setup all Controllers.
@@ -326,22 +348,22 @@ func main() {
 		<-certSetupFinished
 
 		// Register webhooks.
-		if ptr.ToBool(cfg.EnforceEphemeralPVC) {
+		if ephemeralCreateWebhookConfig != "" {
 			pvcHandler, err := pvc.NewHandler(volumeClient.GetDriverName(), mgr.GetClient(), mgr.GetScheme(), recorder)
 			if err != nil {
 				logAndExit(err, "unable to create pvc handler")
 			}
-			mgr.GetWebhookServer().Register("/pvc-create", &webhook.Admission{Handler: pvcHandler})
+			mgr.GetWebhookServer().Register("/validate-pvc", &webhook.Admission{Handler: pvcHandler})
 		}
 
 		// When node affinity is removed from PVs, we ensure that the PV is bound to
 		// the correct node through the hyperconverged webhook.
-		if ptr.ToBool(cfg.EnforceHyperconvergedWithWebhook) {
+		if hyperconvergedWebhookConfig != "" {
 			hyperconvergedHandler, err := hyperconverged.NewHandler(namespace, mgr.GetClient(), mgr.GetScheme())
 			if err != nil {
 				logAndExit(err, "unable to create hyperconverged handler")
 			}
-			mgr.GetWebhookServer().Register("/mutate-hyperconverged-pods", &webhook.Admission{Handler: hyperconvergedHandler})
+			mgr.GetWebhookServer().Register("/mutate-pod", &webhook.Admission{Handler: hyperconvergedHandler})
 		}
 	}()
 

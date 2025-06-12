@@ -26,7 +26,7 @@ var _ = Describe("Local CSI Driver", Label("e2e"), Ordered, func() {
 		It("should provision certificates", func(ctx context.Context) {
 			By("validating that the certificate Secret exists")
 			verifySecret := func(g Gomega, ctx context.Context) {
-				cmd := exec.CommandContext(ctx, "kubectl", "get", "secrets", "webhook-server-cert", "-n", namespace)
+				cmd := exec.CommandContext(ctx, "kubectl", "get", "secrets", *releaseName+"-webhook-server-cert", "-n", namespace)
 				_, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 			}
@@ -52,7 +52,7 @@ var _ = Describe("Local CSI Driver", Label("e2e"), Ordered, func() {
 			verifyCAInjection := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get",
 					"validatingwebhookconfigurations.admissionregistration.k8s.io",
-					*releaseName+"-pvc-create-webhook",
+					*releaseName+"-ephemeral-webhook",
 					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
 				vwhOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())

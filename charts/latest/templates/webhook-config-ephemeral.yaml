@@ -1,7 +1,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{ include "chart.fullname" . }}-pvc-create-webhook
+  name: {{ include "chart.fullname" . }}-ephemeral-webhook
   labels:
   {{- include "chart.labels" . | nindent 4 }}
 webhooks:
@@ -9,9 +9,9 @@ webhooks:
   - v1
   clientConfig:
     service:
-      name: {{ include "chart.fullname" . }}-webhook-service
+      name: {{ include "chart.fullname" . }}-webhook
       namespace: '{{ .Release.Namespace }}'
-      path: /pvc-create
+      path: /validate-pvc
   failurePolicy: Ignore
   name: pvc.acstor.azure.com
   rules:
