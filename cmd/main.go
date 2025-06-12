@@ -80,7 +80,6 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var enableLeaderElection bool
 	var leaderElectionID string
 	var workers int
 	var apiQPS int
@@ -117,10 +116,8 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election. Required when webhooks are enabled.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "local-csi-driver-leader-election",
-		"The ID used for leader election.")
+		"The ID used for leader election when webhooks are enabled.")
 	flag.IntVar(&workers, "worker-threads", 10,
 		"Number of worker threads per controller, in other words nr. of simultaneous CSI calls.")
 	flag.IntVar(&apiQPS, "kube-api-qps", 20,
@@ -221,6 +218,10 @@ func main() {
 	restCfg.QPS = float32(apiQPS)
 	restCfg.Burst = apiBurst
 
+	// Leader election must be enabled when webhooks are active so that the cert rotator
+	// runs on a single instance of the controller.
+	enableLeaderElection := hyperconvergedWebhookConfig != "" || ephemeralCreateWebhookConfig != ""
+
 	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -256,10 +257,10 @@ func main() {
 	certSetupFinished := make(chan struct{})
 	if len(webhooks) > 0 {
 		if certSecretName == "" {
-			logAndExit(fmt.Errorf("certificate secret name not set"), "certificate secret name must be set when webhooks are enabled")
+			logAndExit(fmt.Errorf("--certificate-secret-name not specified"), "certificate secret name must be set when webhooks are enabled")
 		}
 		if webhookSvcName == "" {
-			logAndExit(fmt.Errorf("webhook service name must be set when webhooks are enabled"), "webhook service name must be set")
+			logAndExit(fmt.Errorf("--webhook-service-name not specified"), "webhook service name must be set when webhooks are enabled")
 		}
 		log.Info("setting up cert rotation")
 		if err := rotator.AddRotator(mgr, &rotator.CertRotator{

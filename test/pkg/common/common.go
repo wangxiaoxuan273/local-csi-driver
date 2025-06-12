@@ -40,11 +40,14 @@ var (
 	// - SKIP_SUPPORT_BUNDLE=true: Skips collecting support bundle after the
 	//   test.
 	// - SKIP_BUILD=true: Skips building the manager and agent images.
+	// - INSTALLATION_METHOD=helm: Installs csi driver using helm, otherwise installs
+	//   using make install and make deploy.
 	skipPrometheusInstall                = os.Getenv("SKIP_INSTALL_PROMETHEUS") == trueString
 	skipUninstall                        = os.Getenv("SKIP_UNINSTALL") == trueString
 	createCluster                        = os.Getenv("CREATE_CLUSTER") == trueString
 	skipSupportBundle                    = os.Getenv("SKIP_SUPPORT_BUNDLE") == trueString
 	skipBuild                            = os.Getenv("SKIP_BUILD") == trueString
+	useLocalHelmCharts                   = os.Getenv("INSTALLATION_METHOD") == "localHelm"
 	isPrometheusOperatorAlreadyInstalled = false
 
 	// isKindClusterCreated will be set true when a Kind cluster is already created.
@@ -137,10 +140,12 @@ func Setup(ctx context.Context, namespace string) {
 		err = docker.PushImage(ctx, image)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to push the image to the registry")
 
-		By("pushing the helm chart to the registry")
-		cmd := exec.CommandContext(ctx, "make", "helm-push")
-		_, err = utils.Run(cmd)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to push the helm chart to the registry")
+		if !useLocalHelmCharts {
+			By("pushing the helm chart to the registry")
+			cmd := exec.CommandContext(ctx, "make", "helm-push")
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to push the helm chart to the registry")
+		}
 	}
 
 	if !kind.IsCluster() {
@@ -182,12 +187,19 @@ func Setup(ctx context.Context, namespace string) {
 		}
 	}).WithContext(ctx).Should(Succeed(), "Namespace creation failed or namespace not found")
 
-	By("installing csi driver with helm")
-	Eventually(func(g Gomega, ctx context.Context) {
-		cmd = exec.CommandContext(ctx, "make", "helm-install")
+	if useLocalHelmCharts {
+		By("installing csi driver with local helm charts")
+		cmd = exec.CommandContext(ctx, "make", "deploy", fmt.Sprintf("IMG=%s", image))
 		_, err = utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to install csi driver with helm")
-	}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "Failed to install csi driver with helm")
+		Expect(err).NotTo(HaveOccurred(), "Failed to install csi driver with local helm charts")
+	} else {
+		By("installing csi driver with helm")
+		Eventually(func(g Gomega, ctx context.Context) {
+			cmd = exec.CommandContext(ctx, "make", "helm-install")
+			_, err = utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred(), "Failed to install csi driver with helm")
+		}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "Failed to install csi driver with helm")
+	}
 
 	By("validating that components are running as expected")
 	VerifyDriverUp(ctx, namespace)
