@@ -115,7 +115,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0 // indirect
 	go.opentelemetry.io/otel/exporters/prometheus v0.57.0
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.35.0
+	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.36.0
 	go.opentelemetry.io/otel/metric v1.36.0
 	go.opentelemetry.io/otel/sdk/metric v1.36.0
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
