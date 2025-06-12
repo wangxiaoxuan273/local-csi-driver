@@ -1,0 +1,12 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "agentvmsize": {
+            "value": "standard_d16pds_v6"
+        },
+        "agentCount": {
+            "value": 2
+        }
+    }
+}

@@ -85,14 +85,21 @@ jobs:
         id: build-date
         run: echo "date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
 
+      - name: Set Docker tags
+        id: docker-tags
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ needs.vars.outputs.TAG }}"
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
       - name: Docker build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           push: true
-          tags: |
-             ${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ needs.vars.outputs.TAG }}
-             ${{ env.REGISTRY }}/${{ env.REPO_BASE }}/driver:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest
+          tags: ${{ steps.docker-tags.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -157,12 +164,17 @@ jobs:
             command: "test-e2e"
             cluster_type: "kind"
 
-          - name: "AKS Integration Test Azure Linux"
+          - name: "Integration Test Azure Linux"
             command: "test-e2e-aks"
             cluster_type: "aks"
             aks_template: "nvme"
 
-          - name: "AKS Integration Test Ubuntu"
+          - name: "Integration Azure Linux ARM"
+            command: "test-e2e-aks"
+            cluster_type: "aks"
+            aks_template: "nvme-arm"
+
+          - name: "Integration Test Ubuntu"
             command: "test-e2e-aks"
             cluster_type: "aks"
             aks_template: "nvme-ubuntu"
