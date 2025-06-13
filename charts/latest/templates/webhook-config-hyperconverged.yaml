@@ -10,7 +10,7 @@ webhooks:
   - v1
   clientConfig:
     service:
-      name: {{ include "chart.fullname" . }}-webhook
+      name: {{ include "chart.fullname" . }}-webhook-service
       namespace: '{{ .Release.Namespace }}'
       path: /mutate-pod
   failurePolicy: Ignore

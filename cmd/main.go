@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -344,12 +345,25 @@ func main() {
 		logAndExit(err, "unable to add csi server to internal manager")
 	}
 
-	// Add the health endpoints to the manager.
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+	// If webhooks are enabled, we need to ensure that the cert rotator
+	// has finished setting up the certificates before we can start the webhook server.
+	checker := healthz.Ping
+	if len(webhooks) > 0 {
+		checker = func(req *http.Request) error {
+			select {
+			case <-certSetupFinished:
+				return mgr.GetWebhookServer().StartedChecker()(req)
+			default:
+				return fmt.Errorf("certs are not ready yet")
+			}
+		}
+	}
+
+	if err := mgr.AddHealthzCheck("healthz", checker); err != nil {
 		logAndExit(err, "unable to set up health check")
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		logAndExit(err, "unable to set up ready check")
+	if err := mgr.AddReadyzCheck("readyz", checker); err != nil {
+		logAndExit(err, "unable to set up health check")
 	}
 
 	// Once the cert rotator has finished, add the webhook handlers.

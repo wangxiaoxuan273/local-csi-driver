@@ -33,8 +33,8 @@ spec:
                 - linux
       containers:
       - args: {{- toYaml .Values.node.driver.args | nindent 8 }}
-        {{- if or .Values.node.driver.webhooks.ephemeral.enabled .Values.drivers.webhooks.hyperconverged.enabled }}
-        - --webhook-service-name={{ include "chart.fullname" . }}-webhook
+        {{- if or .Values.node.driver.webhooks.ephemeral.enabled .Values.node.driver.webhooks.hyperconverged.enabled }}
+        - --webhook-service-name={{ include "chart.fullname" . }}-webhook-service
         {{- end }}
         {{- if .Values.node.driver.webhooks.ephemeral.enabled }}
         - --ephemeral-webhook-config={{ include "chart.fullname" . }}-ephemeral-webhook
