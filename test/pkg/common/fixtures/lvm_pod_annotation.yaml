@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lvm-pod-annotation
+  labels:
+    app: busybox
+    part-of: e2e-test
+spec:
+  nodeSelector:
+    "kubernetes.io/os": linux
+  containers:
+    - name: statefulset-cns
+      image: mcr.microsoft.com/azurelinux/busybox:1.36
+      command:
+        - "/bin/sh"
+        - "-c"
+        - set -euo pipefail; trap exit TERM; while true; do echo $(date) >> /mnt/cns/outfile; sleep 1; done
+      volumeMounts:
+        - name: persistent-storage
+          mountPath: /mnt/cns
+  volumes:
+    - name: persistent-storage
+      persistentVolumeClaim:
+        claimName: lvm-pvc-annotation

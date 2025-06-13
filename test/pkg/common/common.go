@@ -154,15 +154,6 @@ func Setup(ctx context.Context, namespace string) {
 		}
 	}
 
-	if !kind.IsCluster() {
-		By("applying LogAnalyticsConfigFixture")
-		Eventually(func(g Gomega, ctx context.Context) {
-			cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", LogAnalyticsConfigFixture)
-			_, err = utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred(), "Failed to apply LogAnalyticsConfigFixture")
-		}).WithContext(ctx).Should(Succeed(), "Failed to apply LogAnalyticsConfigFixture")
-	}
-
 	// The test-e2e make target is intended to run on a temporary cluster that
 	// is created and destroyed for testing. To prevent errors when tests run in
 	// environments with Prometheus or CertManager already installed, we check
@@ -297,15 +288,6 @@ func Teardown(ctx context.Context, namespace string) {
 	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
 		utils.UninstallCertManager(ctx)
-	}
-
-	if !kind.IsCluster() {
-		By("deleting LogAnalyticsConfigFixture")
-		Eventually(func(g Gomega, ctx context.Context) {
-			cmd := exec.CommandContext(ctx, "kubectl", "delete", "-f", LogAnalyticsConfigFixture, "--ignore-not-found")
-			_, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred(), "Failed to delete LogAnalyticsConfigFixture")
-		}).WithContext(ctx).Should(Succeed(), "Failed to delete LogAnalyticsConfigFixture")
 	}
 
 	if createCluster && !isKindClusterCreated {

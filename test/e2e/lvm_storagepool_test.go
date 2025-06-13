@@ -15,61 +15,7 @@ import (
 )
 
 var testLvmStoragePool = func() {
-	Context("lvm controllers", Label("aks", "lvm"), func() {
-		// BeforeAll(func(ctx context.Context) {
-
-		// 	By("Creating storagepool")
-		// 	cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", common.LvmStoragePoolFixture)
-		// 	_, err := utils.Run(cmd)
-		// 	Expect(err).NotTo(HaveOccurred(), "Failed to apply storagepool")
-
-		// 	DeferCleanup(func(ctx context.Context) {
-		// 		By("Deleting storagepool")
-		// 		cmd := exec.CommandContext(ctx, "kubectl", "delete", "--wait", "--ignore-not-found", "-f", common.LvmStoragePoolFixture)
-		// 		_, err := utils.Run(cmd)
-		// 		Expect(err).NotTo(HaveOccurred(), "Failed to delete storagepool")
-		// 		By("Waiting for diskpools to be Available")
-		// 		EventuallyDiskpoolPhase("Available").WithContext(ctx).Should(Succeed(), "Diskpools should eventually be Available again")
-		// 	})
-
-		// 	By("validating that diskpools are created for every l-series node")
-		// 	Eventually(func(g Gomega, ctx context.Context) {
-		// 		cmd := exec.Command("kubectl", "get",
-		// 			"node",
-		// 			"-l", "node.kubernetes.io/instance-type in (standard_l8s_v3, standard_l16s_v3, standard_l32s_v3, "+
-		// 				"standard_l48s_v3, standard_l64s_v3, standard_l80s_v3)",
-		// 			"-o", "go-template={{ range .items }}"+
-		// 				"{{ .metadata.name }}"+
-		// 				"{{ \"\\n\" }}{{ end }}",
-		// 		)
-		// 		nodeOutput, err := utils.Run(cmd)
-		// 		g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve node information")
-		// 		nodeNames := utils.GetNonEmptyLines(nodeOutput)
-		// 		cmd = exec.CommandContext(ctx, "kubectl", "get",
-		// 			"diskpools.local.storage.azure.com",
-		// 			"-o", "go-template={{ range .items }}"+
-		// 				"{{ .spec.nodeName }}"+
-		// 				"{{ \"\\n\" }}{{ end }}",
-		// 			"-n", namespace,
-		// 		)
-		// 		diskpoolOutput, err := utils.Run(cmd)
-		// 		g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve diskpool information")
-		// 		diskpoolNodesNames := utils.GetNonEmptyLines(diskpoolOutput)
-		// 		g.Expect(diskpoolNodesNames).To(ConsistOf(nodeNames), "All nodes should be in diskpool")
-		// 		g.Expect(diskpoolNodesNames).To(HaveLen(len(nodeNames)), "All nodes should be in diskpool")
-		// 	}).WithContext(ctx).Should(Succeed(), "Diskpools should eventually be created for every l-series node")
-
-		// 	By("Waiting for storagepool to be ready")
-		// 	cmd = exec.CommandContext(ctx, "kubectl", "wait", "--for=condition=Ready", "--timeout=5m", "-f", common.LvmStoragePoolFixture)
-		// 	_, err = utils.Run(cmd)
-		// 	Expect(err).NotTo(HaveOccurred(), "Failed to wait for storagepool")
-
-		// 	By("Waiting for diskpools to be Bound")
-		// 	EventuallyDiskpoolPhase("Bound").WithContext(ctx).Should(Succeed(), "Diskpools should eventually be Bound")
-
-		// 	EventuallyUsedAmount("0").WithContext(ctx).Should(Succeed(), "Failed to verify storagepool used capacity")
-		// })
-
+	Context("lvm controllers", Label("lvm"), func() {
 		It("should create storageclass", func(ctx context.Context) {
 			cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", common.LvmStorageClassFixture)
 			_, err := utils.Run(cmd)
@@ -84,12 +30,15 @@ var testLvmStoragePool = func() {
 
 		lvmStatefulsetTest("should create statefulset with local storagepool", common.LvmStatefulSetFixture)
 		lvmStatefulsetTest("should create annotation statefulset with local storagepool", common.LvmAnnotationStatefulSetFixture)
+		lvmWebhookRejectTest("should reject statefulset with non-ephemeral local storagepool", common.LvmPvcNoAnnotationFixture)
+		lvmHyperconvergedTest("should create hyperconverged pod with local storagepool", common.LvmPvcAnnotationFixure, common.LvmPodAnnotationFixture)
 	})
 
 }
 
+// lvmStatefulsetTest applies a statefulset fixture and waits for it to be ready.
 func lvmStatefulsetTest(name, statefulsetFixture string) {
-	It(name, func(ctx context.Context) {
+	It(name, Label("aks"), func(ctx context.Context) {
 		cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", statefulsetFixture)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to apply statefulset")
@@ -110,4 +59,87 @@ func lvmStatefulsetTest(name, statefulsetFixture string) {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to wait for statefulset")
 	})
+}
+
+// lvmWebhookRejectTest tests that the webhook rejects PVCs that are not ephemeral.
+func lvmWebhookRejectTest(name, fixture string) {
+	It(name, func(ctx context.Context) {
+		cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", fixture)
+		out, err := utils.Run(cmd)
+		Expect(err).To(HaveOccurred(), "pvc should not be created")
+
+		// Check that the error message matches the expected webhook rejection
+		expectedErr := "denied the request: only generic ephemeral volumes are allowed for"
+		Expect(out).To(ContainSubstring(expectedErr), "Error should indicate webhook rejection for non-ephemeral PVC")
+
+		// If the PVC was created due to bug by us, it should be deleted.
+		DeferCleanup(func(ctx context.Context) {
+			By("Deleting pvc")
+			cmd := exec.CommandContext(ctx, "kubectl", "delete", "--wait", "--ignore-not-found", "-f", fixture)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to delete pvc")
+		})
+	})
+}
+
+// lvmHyperconvergedTest make sure that pod scheduled second time for
+// annotation PVC ends up on the same node.
+func lvmHyperconvergedTest(name, pvcFixture, podFixture string) {
+	It(name, Label("aks"), func(ctx context.Context) {
+		cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", pvcFixture)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "pvc should be created")
+
+		DeferCleanup(func(ctx context.Context) {
+			By("Deleting pvc")
+			cmd := exec.CommandContext(ctx, "kubectl", "delete", "--wait", "--ignore-not-found", "-f", pvcFixture)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to delete pvc")
+		})
+
+		cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", podFixture)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "pod should be created")
+
+		DeferCleanup(func(ctx context.Context) {
+			By("Deleting pod")
+			cmd := exec.CommandContext(ctx, "kubectl", "delete", "--wait", "--ignore-not-found", "-f", podFixture)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to delete pod")
+		})
+
+		By("Waiting for pod to be Running")
+		Eventually(func(g Gomega, ctx context.Context) {
+			cmd := exec.CommandContext(ctx, "kubectl", "get", "pod", "-l", "part-of=e2e-test", "-o", "jsonpath={.items[0].status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred(), "Failed to get pod status")
+			g.Expect(out).To(Equal("Running"), "Pod should be in Running state")
+		}).WithContext(ctx).Should(Succeed(), "Failed to wait for pod to be Running")
+
+		By("Deleting pod to test recreation with the same PVC")
+		cmd = exec.CommandContext(ctx, "kubectl", "delete", "--wait", "--ignore-not-found", "-f", podFixture)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to delete pod")
+
+		By("Creating pod again with the same PVC")
+		cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", podFixture)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply pod fixture")
+
+		By("Waiting for pod to be Running after recreation")
+		Eventually(func(g Gomega, ctx context.Context) {
+			cmd := exec.CommandContext(ctx, "kubectl", "get", "pod", "-l", "part-of=e2e-test", "-o", "jsonpath={.items[0].status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred(), "Failed to get pod status")
+			g.Expect(out).To(Equal("Running"), "Pod should be in Running state after recreation")
+		}).WithContext(ctx).Should(Succeed(), "Failed to wait for pod to be Running after recreation")
+
+		// check thate spec.affinity.nodeAffinity is set
+		cmd = exec.CommandContext(ctx, "kubectl", "get", "pod", "-l", "part-of=e2e-test", "-o", "jsonpath={.items[0].spec.affinity.nodeAffinity}")
+		out, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to get pod node affinity")
+		Expect(out).NotTo(BeEmpty(), "Node affinity should be set on the pod")
+		Expect(out).To(ContainSubstring("preferredDuringSchedulingIgnoredDuringExecution"), "Node affinity should be required during scheduling")
+	})
+
 }
