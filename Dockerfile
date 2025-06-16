@@ -21,6 +21,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY cmd/ cmd/
 COPY internal/ internal/
 
+ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
 ARG BUILD_ID
@@ -33,6 +34,7 @@ ARG BUILD_ID
 # and binary shipped on it will have the same platform.
 #
 ARG LDFLAGS="\
+    -X local-csi-driver/internal/pkg/version.version=${VERSION} \
     -X local-csi-driver/internal/pkg/version.gitCommit=${GIT_COMMIT} \
     -X local-csi-driver/internal/pkg/version.buildDate=${BUILD_DATE} \
     -X local-csi-driver/internal/pkg/version.buildId=${BUILD_ID}"

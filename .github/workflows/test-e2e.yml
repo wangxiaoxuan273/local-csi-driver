@@ -105,6 +105,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             BUILD_ID=${{ github.run_id }}
+            VERSION=${{ needs.vars.outputs.TAG }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ steps.build-date.outputs.date }}
 
