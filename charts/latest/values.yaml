@@ -4,13 +4,6 @@ clusterConfig:
     kind: ClusterConfig
     enforceEphemeralPVC: true
     enforceHyperconvergedWithWebhook: true
-clusterManagerMetricsService:
-  ports:
-  - name: https
-    port: 8443
-    protocol: TCP
-    targetPort: 8443
-  type: ClusterIP
 kubernetesClusterDomain: cluster.local
 node:
   csiProvisioner:
