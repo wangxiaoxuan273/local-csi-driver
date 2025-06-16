@@ -207,6 +207,11 @@ func (l *LVM) Start(ctx context.Context) error {
 	return nil
 }
 
+// NeedLeaderElection returns false since LVM should be running on each node.
+func (l *LVM) NeedLeaderElection() bool {
+	return false
+}
+
 // GetCSIDriver returns the CSI driver object for the volume manager.
 func (l *LVM) GetCSIDriver() *storagev1.CSIDriver {
 	return csiDriver

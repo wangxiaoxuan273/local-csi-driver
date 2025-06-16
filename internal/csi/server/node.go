@@ -93,3 +93,9 @@ func (s *NodeServer) Start(ctx context.Context) error {
 
 	return <-errCh
 }
+
+// NeedLeaderElection returns false since the CSI controllers should run on each
+// node.
+func (s *NodeServer) NeedLeaderElection() bool {
+	return false
+}

@@ -33,28 +33,22 @@ var (
 	// Optional Environment Variables:
 	// - SKIP_INSTALL_PROMETHEUS=true: Skips Prometheus Operator installation
 	//   during test setup.
-	// - SKIP_INSTALL_CERT_MANAGER=true: Skips CertManager installation during
-	//   test setup.
 	// - SKIP_UNINSTALL=true: Skips uninstalling everything. Useful for
 	//   debugging and re-running tests.
 	// - CREATE_CLUSTER=true: Creates and deletes a new Kind cluster. Useful for
 	//   debugging and re-running tests.
 	// - SKIP_SUPPORT_BUNDLE=true: Skips collecting support bundle after the
 	//   test.
-	// - SKIP_BUILD=true: Skips building the manager and agent images
+	// - SKIP_BUILD=true: Skips building the manager and agent images.
 	// - INSTALLATION_METHOD=helm: Installs csi driver using helm, otherwise installs
 	//   using make install and make deploy.
 	skipPrometheusInstall                = os.Getenv("SKIP_INSTALL_PROMETHEUS") == trueString
-	skipCertManagerInstall               = os.Getenv("SKIP_INSTALL_CERT_MANAGER") == trueString
 	skipUninstall                        = os.Getenv("SKIP_UNINSTALL") == trueString
 	createCluster                        = os.Getenv("CREATE_CLUSTER") == trueString
 	skipSupportBundle                    = os.Getenv("SKIP_SUPPORT_BUNDLE") == trueString
 	skipBuild                            = os.Getenv("SKIP_BUILD") == trueString
 	useLocalHelmCharts                   = os.Getenv("INSTALLATION_METHOD") == "localHelm"
 	isPrometheusOperatorAlreadyInstalled = false
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs are
-	// found on the cluster.
-	isCertManagerAlreadyInstalled = false
 
 	// isKindClusterCreated will be set true when a Kind cluster is already created.
 	isKindClusterCreated = false
@@ -154,15 +148,6 @@ func Setup(ctx context.Context, namespace string) {
 		}
 	}
 
-	if !kind.IsCluster() {
-		By("applying LogAnalyticsConfigFixture")
-		Eventually(func(g Gomega, ctx context.Context) {
-			cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", LogAnalyticsConfigFixture)
-			_, err = utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred(), "Failed to apply LogAnalyticsConfigFixture")
-		}).WithContext(ctx).Should(Succeed(), "Failed to apply LogAnalyticsConfigFixture")
-	}
-
 	// The test-e2e make target is intended to run on a temporary cluster that
 	// is created and destroyed for testing. To prevent errors when tests run in
 	// environments with Prometheus or CertManager already installed, we check
@@ -182,18 +167,6 @@ func Setup(ctx context.Context, namespace string) {
 			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Prometheus Operator is already installed. Skipping installation...\n")
 		}
 	}
-	if !skipCertManagerInstall {
-		By("checking if cert manager is installed already")
-		isCertManagerAlreadyInstalled = utils.IsCertManagerCRDsInstalled(ctx)
-		if !isCertManagerAlreadyInstalled {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
-			Eventually(func(g Gomega, ctx context.Context) {
-				g.Expect(utils.InstallCertManager(ctx)).To(Succeed(), "CertManager installed successfully")
-			}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "Failed to install CertManager")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
-		}
-	}
 
 	By("creating namespace")
 	Eventually(func(g Gomega) {
@@ -205,56 +178,15 @@ func Setup(ctx context.Context, namespace string) {
 		}
 	}).WithContext(ctx).Should(Succeed(), "Namespace creation failed or namespace not found")
 
-	By("validating that the cert-manager-webhook endpoint is up")
-	verifyEndpointUp := func(g Gomega) {
-		// Verify that webhooks are available
-		cmd := exec.CommandContext(ctx, "kubectl", "get", "endpoints", "cert-manager-webhook",
-			"-n", "cert-manager", "-o", "jsonpath={.subsets[*].addresses[*].ip}")
-		output, err := utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve webhook service endpoints")
-		g.Expect(output).NotTo(BeEmpty(), "Webhook service endpoints are not available")
-
-		cmd = exec.CommandContext(ctx, "kubectl", "apply", "-f", FakeCertFixture)
-		_, err = utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to create fake certificate")
-
-		cmd = exec.CommandContext(ctx, "kubectl", "delete", "-f", FakeCertFixture)
-		_, err = utils.Run(cmd)
-		g.Expect(err).NotTo(HaveOccurred(), "Failed to delete fake certificate")
-	}
-	Eventually(verifyEndpointUp).WithContext(ctx).Should(Succeed())
-
 	if useLocalHelmCharts {
 		By("installing csi driver with local helm charts")
 		cmd = exec.CommandContext(ctx, "make", "deploy", fmt.Sprintf("IMG=%s", image))
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to install csi driver with local helm charts")
 	} else {
-		By("patching helm values for test")
-		cmd = exec.CommandContext(ctx, "make", "helm-show-values")
-		output, err := utils.RunOutput(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to get helm values")
-
-		output = strings.ReplaceAll(output, "enableInstallerStrictMode: true", "enableInstallerStrictMode: false")
-		output = strings.ReplaceAll(output, "# enableInstallerStrictMode: false", "enableInstallerStrictMode: false")
-
-		tmpFile, err := os.CreateTemp("", "csi-local-helm-values-*.yaml")
-		Expect(err).NotTo(HaveOccurred(), "Failed to create temp file for helm values")
-
-		_, _ = fmt.Fprintf(GinkgoWriter, "Writing helm values to temp file: %s\n", tmpFile.Name())
-
-		_, err = tmpFile.WriteString(output)
-		Expect(err).NotTo(HaveOccurred(), "Failed to write helm values to temp file")
-
-		DeferCleanup(func() {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Deleting temp file: %s\n", tmpFile.Name())
-			err := os.Remove(tmpFile.Name())
-			Expect(err).NotTo(HaveOccurred(), "Failed to delete temp file")
-		})
-
 		By("installing csi driver with helm")
 		Eventually(func(g Gomega, ctx context.Context) {
-			cmd = exec.CommandContext(ctx, "make", "helm-install", fmt.Sprintf("HELM_ARGS=--values=%s", tmpFile.Name()))
+			cmd = exec.CommandContext(ctx, "make", "helm-install")
 			_, err = utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred(), "Failed to install csi driver with helm")
 		}).WithTimeout(5*time.Minute).WithContext(ctx).Should(Succeed(), "Failed to install csi driver with helm")
@@ -293,19 +225,6 @@ func Teardown(ctx context.Context, namespace string) {
 	if !skipPrometheusInstall && !isPrometheusOperatorAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling Prometheus Operator...\n")
 		utils.UninstallPrometheusOperator(ctx)
-	}
-	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
-		utils.UninstallCertManager(ctx)
-	}
-
-	if !kind.IsCluster() {
-		By("deleting LogAnalyticsConfigFixture")
-		Eventually(func(g Gomega, ctx context.Context) {
-			cmd := exec.CommandContext(ctx, "kubectl", "delete", "-f", LogAnalyticsConfigFixture, "--ignore-not-found")
-			_, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred(), "Failed to delete LogAnalyticsConfigFixture")
-		}).WithContext(ctx).Should(Succeed(), "Failed to delete LogAnalyticsConfigFixture")
 	}
 
 	if createCluster && !isKindClusterCreated {

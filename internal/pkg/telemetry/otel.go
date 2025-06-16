@@ -155,3 +155,9 @@ func (p *OtelProviders) Start(ctx context.Context) error {
 	}
 	return nil
 }
+
+// NeedLeaderElection returns false since the telemetry providers should always
+// be available.
+func (p *OtelProviders) NeedLeaderElection() bool {
+	return false
+}

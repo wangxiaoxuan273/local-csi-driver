@@ -32,12 +32,6 @@ type ClusterConfig struct {
 	// Version is the semver version of the Helm chart that installed this
 	// configuration.
 	Version string `json:"version,omitempty"`
-	// Enable the PVC webhook, to enforce generic ephemeral volumes only unless
-	// pvc annotations for persistent storage are set.
-	EnforceEphemeralPVC *bool `json:"enforceEphemeralPVC,omitempty"`
-	// EnforceHyperconvergedWithWebhook enables the webhook that enforces
-	// hyperconverged mode for the Local CSI Driver.
-	EnforceHyperconvergedWithWebhook *bool `json:"enforceHyperconvergedWithWebhook,omitempty"`
 }
 
 func init() {

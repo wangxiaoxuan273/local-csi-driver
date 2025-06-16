@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    part-of: e2e-test
+  annotations:
+    local.csi.azure.com/accept-ephemeral-storage: "true"
+  name: lvm-pvc-annotation
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local

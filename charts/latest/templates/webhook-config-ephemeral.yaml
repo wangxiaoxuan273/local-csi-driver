@@ -1,9 +1,8 @@
+{{- if .Values.node.driver.webhooks.ephemeral.enabled }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{ include "chart.fullname" . }}-pvc-create-webhook
-  annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "chart.fullname" . }}-serving-cert
+  name: {{ include "chart.fullname" . }}-ephemeral-webhook
   labels:
   {{- include "chart.labels" . | nindent 4 }}
 webhooks:
@@ -13,7 +12,7 @@ webhooks:
     service:
       name: {{ include "chart.fullname" . }}-webhook-service
       namespace: '{{ .Release.Namespace }}'
-      path: /pvc-create
+      path: /validate-pvc
   failurePolicy: Ignore
   name: pvc.acstor.azure.com
   rules:
@@ -27,3 +26,4 @@ webhooks:
     - persistentvolumeclaims
     scope: Namespaced
   sideEffects: None
+{{- end }}

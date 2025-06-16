@@ -1,9 +1,8 @@
+{{- if .Values.node.driver.webhooks.hyperconverged.enabled }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: {{ include "chart.fullname" . }}-hyperconverged-webhook
-  annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "chart.fullname" . }}-serving-cert
   labels:
   {{- include "chart.labels" . | nindent 4 }}
 webhooks:
@@ -13,7 +12,7 @@ webhooks:
     service:
       name: {{ include "chart.fullname" . }}-webhook-service
       namespace: '{{ .Release.Namespace }}'
-      path: /mutate-hyperconverged-pods
+      path: /mutate-pod
   failurePolicy: Ignore
   name: hyperconverged.local.csi.azure.com
   rules:
@@ -26,3 +25,4 @@ webhooks:
     resources:
     - pods
   sideEffects: None
+{{- end }}

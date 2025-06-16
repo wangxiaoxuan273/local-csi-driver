@@ -116,7 +116,6 @@ test: manifests generate envtest go-junit-report gocov gocov-xml ## Run tests an
 # Prometheus and CertManager and Jaeger are installed by default if they not
 # already installed. Skip install with:
 # - SKIP_INSTALL_PROMETHEUS=true
-# - SKIP_INSTALL_CERT_MANAGER=true
 # To avoid uninstalling everything after the tests, use:
 # - SKIP_UNINSTALL=true
 .PHONY: e2e
@@ -432,7 +431,6 @@ ENVTEST_VERSION ?= release-0.19
 KIND_VERSION ?= v0.25.0
 GOLANGCI_LINT_VERSION ?= v2.1.6
 GO_JUNIT_REPORT_VERSION ?= v2.1.0
-CERT_MANAGER_VERSION ?= 1.12.12-5
 PROMETHEUS_VERSION ?= v0.77.1
 JAEGER_VERSION ?= v1.62.0
 GINKGO_VERSION ?= v2.23.3
@@ -498,16 +496,6 @@ $(GOCOV_XML): $(LOCALBIN)
 set-docker-pipeline-variables: # Echos variables used to pass information to docker build pipeline.
 	@echo "##vso[task.setvariable variable=build_date;isOutput=true]$$( date -u +%Y-%m-%dT%H:%M:%SZ )"
 	@echo "##vso[task.setvariable variable=git_revision;isOutput=true]$$( git rev-parse HEAD )"
-
-CERT_MANAGER_CHART="oci://mcr.microsoft.com/azurelinux/helm/cert-manager"
-.PHONY: cert-manager
-cert-manager: helm ## Install cert-manager into the current cluster.
-	$(HELM) install cert-manager $(CERT_MANAGER_CHART) --version $(CERT_MANAGER_VERSION) \
-		--set cert-manager.installCRDs=true --namespace cert-manager --create-namespace --wait --debug --atomic
-
-.PHONY: cert-manager-uninstall
-cert-manager-uninstall: helm ## Uninstall cert-manager from the current cluster.
-	$(HELM) uninstall cert-manager --namespace cert-manager --wait --debug --ignore-not-found
 
 .PHONY: kyverno
 kyverno: helm ## Install kyverno into the current cluster.

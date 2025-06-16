@@ -112,54 +112,6 @@ func IsPrometheusCRDsInstalled(ctx context.Context) bool {
 	return false
 }
 
-// UninstallCertManager uninstalls the cert manager.
-func UninstallCertManager(ctx context.Context) {
-	cmd := exec.CommandContext(ctx, "make", "cert-manager-uninstall")
-	if _, err := Run(cmd); err != nil {
-		warnError(err)
-	}
-}
-
-// InstallCertManager installs the cert manager bundle.
-func InstallCertManager(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "make", "cert-manager")
-	_, err := Run(cmd)
-	return err
-}
-
-// IsCertManagerCRDsInstalled checks if any Cert Manager CRDs are installed
-// by verifying the existence of key CRDs related to Cert Manager.
-func IsCertManagerCRDsInstalled(ctx context.Context) bool {
-	// List of common Cert Manager CRDs
-	certManagerCRDs := []string{
-		"certificates.cert-manager.io",
-		"issuers.cert-manager.io",
-		"clusterissuers.cert-manager.io",
-		"certificaterequests.cert-manager.io",
-		"orders.acme.cert-manager.io",
-		"challenges.acme.cert-manager.io",
-	}
-
-	// Execute the kubectl command to get all CRDs
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "crds")
-	output, err := Run(cmd)
-	if err != nil {
-		return false
-	}
-
-	// Check if any of the Cert Manager CRDs are present
-	crdList := GetNonEmptyLines(output)
-	for _, crd := range certManagerCRDs {
-		for _, line := range crdList {
-			if strings.Contains(line, crd) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // GetNonEmptyLines converts given command output string into individual objects
 // according to line breakers, and ignores the empty elements in it.
 func GetNonEmptyLines(output string) []string {
