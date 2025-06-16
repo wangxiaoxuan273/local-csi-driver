@@ -68,7 +68,6 @@ var _ = AfterSuite(func(ctx context.Context) {
 
 var _ = AfterEach(func(ctx context.Context) {
 	common.CollectSupportBundle(ctx, *supportBundleDir)
-
 })
 
 var _ = ReportAfterSuite("e2e reporter", func(ctx SpecContext, r Report) {

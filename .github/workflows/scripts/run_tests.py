@@ -634,8 +634,8 @@ async def select_azure_region(
     # Use consistent regions list
     eligible_regions = [
         "eastus", "northeurope", "westus3", "uksouth", "australiaeast",
-        "westus2", "westeurope", "swedencentral", "eastus2euap",
-        "southeastasia", "francecentral", "southcentralus", "eastus2"
+        "westus2", "westeurope", "swedencentral", "southeastasia",
+        "francecentral", "southcentralus", "eastus2"
     ]
 
     # Parse VM size info
