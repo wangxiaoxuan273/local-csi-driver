@@ -94,9 +94,11 @@ spec:
         terminationMessagePath: /tmp/termination-log
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
+        {{- if or .Values.node.driver.webhooks.ephemeral.enabled .Values.node.driver.webhooks.hyperconverged.enabled }}
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
+        {{- end }}
         - mountPath: /etc/cluster-config.yaml
           name: cluster-config
           subPath: config.yaml
@@ -205,9 +207,11 @@ spec:
       - effect: NoExecute
         operator: Exists
       volumes:
+      {{- if or .Values.node.driver.webhooks.ephemeral.enabled .Values.node.driver.webhooks.hyperconverged.enabled }}
       - name: cert
         secret:
           secretName: {{ include "chart.fullname" . }}-webhook-server-cert
+      {{- end }}
       - configMap:
           name: {{ include "chart.fullname" . }}-cluster-config
         name: cluster-config
