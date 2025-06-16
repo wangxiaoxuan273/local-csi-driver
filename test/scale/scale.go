@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 
-	lvmv1alpha1 "local-csi-driver/api/v1alpha1"
 	"local-csi-driver/test/pkg/common"
 	"local-csi-driver/test/pkg/utils"
 )
@@ -45,7 +44,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(lvmv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 }

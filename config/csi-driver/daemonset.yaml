@@ -59,7 +59,6 @@ spec:
           - --nodeName=$(NODE_NAME)
           - --podName=$(POD_NAME)
           - --namespace=$(POD_NAMESPACE)
-          - --config=/etc/cluster-config.yaml
           - --csi-bind-address=unix:///csi/lvm.sock
           - --metrics-bind-address=:8080
           - --health-probe-bind-address=:8081
@@ -104,9 +103,6 @@ spec:
             cpu: 10m
             memory: 64Mi
         volumeMounts:
-        - name: cluster-config
-          mountPath: /etc/cluster-config.yaml
-          subPath: config.yaml
         - name: device
           mountPath: /dev
         - name: k8s-cfg
@@ -255,9 +251,6 @@ spec:
       serviceAccountName: node
       terminationGracePeriodSeconds: 60
       volumes:
-      - name: cluster-config
-        configMap:
-          name: cluster-config
       - name: device
         hostPath:
           path: /dev

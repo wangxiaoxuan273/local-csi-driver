@@ -1,9 +1,3 @@
-clusterConfig:
-  configYaml: |-
-    apiVersion: local.storage.azure.com/v1alpha1
-    kind: ClusterConfig
-    enforceEphemeralPVC: true
-    enforceHyperconvergedWithWebhook: true
 kubernetesClusterDomain: cluster.local
 node:
   csiProvisioner:
@@ -56,7 +50,6 @@ node:
     - --nodeName=$(NODE_NAME)
     - --podName=$(POD_NAME)
     - --namespace=$(POD_NAMESPACE)
-    - --config=/etc/cluster-config.yaml
     - --csi-bind-address=unix:///csi/lvm.sock
     - --metrics-bind-address=:8080
     - --health-probe-bind-address=:8081
