@@ -34,7 +34,6 @@ import (
 	"local-csi-driver/internal/csi/core/lvm"
 	"local-csi-driver/internal/csi/server"
 	"local-csi-driver/internal/pkg/block"
-	"local-csi-driver/internal/pkg/config"
 	"local-csi-driver/internal/pkg/events"
 	lvmMgr "local-csi-driver/internal/pkg/lvm"
 	"local-csi-driver/internal/pkg/probe"
@@ -76,7 +75,6 @@ func main() {
 	var ephemeralCreateWebhookConfig string
 	var hyperconvergedWebhookConfig string
 	var certSecretName string
-	var configFile string
 	var csiAddr string
 	var metricsAddr string
 	var probeAddr string
@@ -106,9 +104,6 @@ func main() {
 		"The name of the hyperconverged webhook config. Must be set to enable the webhook.")
 	flag.StringVar(&certSecretName, "certificate-secret-name", "",
 		"The name of the secret used to store the certificates. Must be set to enable webhooks.")
-	flag.StringVar(&configFile, "config", "",
-		"The controller will load its initial configuration from this file. "+
-			"Omit this flag to use the default configuration values.")
 	flag.StringVar(&csiAddr, "csi-bind-address", "unix:///tmp/csi.sock",
 		"The address the CSI endpoint binds to. Format: <proto>://<address>")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -289,11 +284,6 @@ func main() {
 	}
 
 	// Setup all Controllers.
-	cfg, err := config.GetClusterConfig(configFile)
-	if err != nil || cfg == nil {
-		logAndExit(err, "unable to get cluster config")
-	}
-
 	if err := raid.Initialize(exec.New()); err != nil {
 		logAndExit(err, "failed to initialize raid")
 	}

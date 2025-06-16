@@ -99,9 +99,6 @@ spec:
           name: cert
           readOnly: true
         {{- end }}
-        - mountPath: /etc/cluster-config.yaml
-          name: cluster-config
-          subPath: config.yaml
         - mountPath: /dev
           name: device
         - mountPath: /etc/kubernetes/
@@ -212,9 +209,6 @@ spec:
         secret:
           secretName: {{ include "chart.fullname" . }}-webhook-server-cert
       {{- end }}
-      - configMap:
-          name: {{ include "chart.fullname" . }}-cluster-config
-        name: cluster-config
       - hostPath:
           path: /dev
           type: Directory

@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # Copy the go source.
 COPY cmd/ cmd/
-COPY api/ api/
 COPY internal/ internal/
 
 ARG GIT_COMMIT
