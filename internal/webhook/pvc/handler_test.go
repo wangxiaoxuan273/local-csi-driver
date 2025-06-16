@@ -75,6 +75,7 @@ var _ = Describe("When PVC controller is running", Serial, func() {
 			By("Creating a non-acstor storage class")
 			sc = GenStorageClass(testStorageClassName, "disk.csi.azure.com", nil)
 			Expect(k8sClient.Create(ctx, sc)).Should(Succeed())
+			Eventually(storageClassExists(sc.Name)).Should(Succeed(), "StorageClass %s should exist before proceeding", sc.Name)
 
 			By("Creating a pvc")
 			pvc = GenPVC(testStorageClassName, Namespace, "1Gi")
@@ -87,6 +88,7 @@ var _ = Describe("When PVC controller is running", Serial, func() {
 			By("Creating an acstor storage class")
 			sc = GenStorageClass(testStorageClassName, DriverName, nil)
 			Expect(k8sClient.Create(ctx, sc)).Should(Succeed())
+			Eventually(storageClassExists(sc.Name)).Should(Succeed(), "StorageClass %s should exist before proceeding", sc.Name)
 			By("Creating a pvc")
 			pvc = GenPVC(testStorageClassName, Namespace, "1Gi")
 			err := k8sClient.Create(ctx, pvc)
@@ -101,6 +103,7 @@ var _ = Describe("When PVC controller is running", Serial, func() {
 			By("Creating an acstor storage class")
 			sc = GenStorageClass(testStorageClassName, DriverName, nil)
 			Expect(k8sClient.Create(ctx, sc)).Should(Succeed())
+			Eventually(storageClassExists(sc.Name)).Should(Succeed(), "StorageClass %s should exist before proceeding", sc.Name)
 			By("Creating a pvc")
 			pvc = GenPVC(testStorageClassName, Namespace, "1Gi")
 			err := k8sClient.Create(ctx, pvc)
@@ -114,6 +117,8 @@ var _ = Describe("When PVC controller is running", Serial, func() {
 			By("Creating an acstor storage class")
 			sc = GenStorageClass(testStorageClassName, DriverName, nil)
 			Expect(k8sClient.Create(ctx, sc)).Should(Succeed())
+			Eventually(storageClassExists(sc.Name)).Should(Succeed(), "StorageClass %s should exist before proceeding", sc.Name)
+
 			By("Creating a pvc with owner of Kind Pod")
 			pvc = GenPVC(testStorageClassName, Namespace, "1Gi")
 			pvc.SetOwnerReferences([]metav1.OwnerReference{
@@ -133,6 +138,7 @@ var _ = Describe("When PVC controller is running", Serial, func() {
 			By("Creating an acstor storage class")
 			sc = GenStorageClass(testStorageClassName, DriverName, nil)
 			Expect(k8sClient.Create(ctx, sc)).Should(Succeed())
+			Eventually(storageClassExists(sc.Name)).Should(Succeed(), "StorageClass %s should exist before proceeding", sc.Name)
 			By("Creating a pvc with annotation of accept-ephemeral-storage")
 			pvc = GenPVC(testStorageClassName, Namespace, "1Gi")
 			pvc.SetAnnotations(map[string]string{
@@ -171,5 +177,12 @@ func GenPVC(scName, namespace, requestStorage string) *corev1.PersistentVolumeCl
 			StorageClassName: &scName,
 			VolumeName:       uuid.NewString(),
 		},
+	}
+}
+
+func storageClassExists(name string) func() error {
+	sc := &storagev1.StorageClass{}
+	return func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Name: name}, sc)
 	}
 }
