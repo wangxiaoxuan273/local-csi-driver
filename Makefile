@@ -203,7 +203,7 @@ docker-build: docker-buildx controller-gen ## Build the docker image.
 BUILDX_BUILDER_NAME ?= img-builder
 OUTPUT_TYPE ?= type=registry
 QEMU_VERSION ?= 7.2.0-1
-ARCH ?= amd64,arm64
+ARCH ?= linux/amd64,linux/arm64
 BUILDKIT_VERSION ?= v0.18.1
 
 .PHONY: docker-buildx
@@ -221,7 +221,7 @@ define docker-build
 		--build-arg GIT_COMMIT=$(COMMIT_HASH) \
 		--build-arg BUILD_ID=$(TAG) \
 		--output=$(OUTPUT_TYPE) \
-		--platform linux/$(ARCH) \
+		--platform $(ARCH) \
 		--pull \
 		--tag $(2) \
 		-f $(1) .
