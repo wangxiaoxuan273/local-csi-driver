@@ -21,6 +21,11 @@ jobs:
       contents: read
       actions: read
 
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'go', 'python', 'actions' ]
+
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@002fdce3c6a235733a90a27c80493a3241e56863 # v2.12.1
@@ -41,7 +46,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
         with:
-          languages: go
+          languages: ${{ matrix.language }}
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
@@ -49,4 +54,4 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
         with:
-          category: "/language:go"
+          category: "/language:${{matrix.language}}"
