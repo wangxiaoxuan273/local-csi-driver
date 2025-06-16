@@ -52,11 +52,6 @@ node:
         cpu: 10m
         memory: 64Mi
   driver:
-    webhooks:
-      ephemeral:
-        enabled: true
-      hyperconverged:
-        enabled: true
     args:
     - --nodeName=$(NODE_NAME)
     - --podName=$(POD_NAME)
@@ -116,9 +111,21 @@ node:
       type: Unconfined
   serviceAccount:
     annotations: {}
-webhookService:
-  ports:
-  - port: 443
-    protocol: TCP
-    targetPort: 9443
-  type: ClusterIP
+
+# webhook configuration.
+webhook:
+  ephemeral:
+    # Enables the ephemeral PVC validation webhook, which enforces that PVCs are
+    # ephemeral, or that the `acstor.azure.com/accept-ephemeral-storage=true`
+    # annotation is present.
+    enabled: true
+  hyperconverged:
+    # Enables the hyperconverged pod mutation webhook. Required to allow pods to
+    # recover (with empty volumes) after cluster restart if node names change.
+    enabled: true
+  service:
+    ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 9443
+    type: ClusterIP
