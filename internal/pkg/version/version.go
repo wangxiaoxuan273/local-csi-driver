@@ -16,6 +16,7 @@ import (
 // These are set during build time via -ldflags.
 var (
 	buildId   = "N/A"
+	version   = "N/A"
 	gitCommit = "N/A"
 	buildDate = "N/A"
 )
@@ -23,6 +24,7 @@ var (
 // Info holds the version information.
 type Info struct {
 	BuildId   string
+	Version   string
 	GitCommit string
 	BuildDate string
 	GoVersion string
@@ -34,6 +36,7 @@ type Info struct {
 func GetInfo() Info {
 	return Info{
 		BuildId:   buildId,
+		Version:   version,
 		GitCommit: gitCommit,
 		BuildDate: buildDate,
 		GoVersion: runtime.Version(),
@@ -46,6 +49,7 @@ func Log(log logr.Logger) {
 	info := GetInfo()
 	log.Info("version info",
 		"buildId", info.BuildId,
+		"version", info.Version,
 		"gitCommit", info.GitCommit,
 		"buildDate", info.BuildDate,
 		"goVersion", info.GoVersion,
@@ -58,7 +62,8 @@ func Log(log logr.Logger) {
 func (i Info) Detect(context.Context) (*resource.Resource, error) {
 	return resource.NewWithAttributes(
 		"",
-		attribute.String("service.version", i.GitCommit),
+		attribute.String("service.version", i.Version),
+		attribute.String("service.gitCommit", i.GitCommit),
 		attribute.String("service.buildId", i.BuildId),
 		attribute.String("service.buildDate", i.BuildDate),
 	), nil

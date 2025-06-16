@@ -15,6 +15,7 @@ func TestGetVersion(t *testing.T) {
 
 	expected := Info{
 		BuildId:   "N/A",
+		Version:   "N/A",
 		GitCommit: "N/A",
 		BuildDate: "N/A",
 		GoVersion: runtime.Version(),
