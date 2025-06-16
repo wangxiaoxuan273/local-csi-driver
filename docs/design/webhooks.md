@@ -56,12 +56,12 @@ metadata:
   annotations:
     local.csi.azure.com/accept-ephemeral-storage: "true" # Optional, allows creation of persistent volumes
 spec:
-    accessModes:
-        - ReadWriteOnce
-    resources:
-        requests:
-        storage: 10Gi
-    storageClassName: local
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local
 ```
 
 ## Mutation (Hyperconverged) Webhook
@@ -85,46 +85,42 @@ required. This is why the mutation webhook is provided as an alternative
 approach for use cases where cluster administrators want to avoid manual
 cleanup.
 
-### Example
+### Example of PV with Node Affinity
 
 ```yaml
 apiVersion: v1
 kind: PersistentVolume
-  metadata:
-    creationTimestamp: "2025-05-30T22:00:50Z"
-    finalizers:
+metadata:
+  finalizers:
     - external-provisioner.volume.kubernetes.io/finalizer
     - kubernetes.io/pv-protection
-    name: pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
-    [...]
-  spec:
-    accessModes:
+  name: pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
+  [...]
+spec:
+  accessModes:
     - ReadWriteOnce
-    capacity:
-      storage: 10Gi
-    claimRef:
-      apiVersion: v1
-      kind: PersistentVolumeClaim
-      [...]
-    csi:
-      driver: local.csi.azure.com
-      volumeAttributes:
-        [...]
-      volumeHandle: containerstorage#pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
-    nodeAffinity:
-      required:
-        nodeSelectorTerms:
-          matchExpressions:
-            - key: topology.local.csi.azure.com/node 
-              operator: In 
-              values:
-              - nvme-node-0 
-    persistentVolumeReclaimPolicy: Delete
-    storageClassName: local
-    volumeMode: Filesystem
-  status:
-    lastPhaseTransitionTime: "2025-05-30T22:00:50Z"
-    phase: Bound
+  capacity:
+    storage: 10Gi
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    [...]
+  csi:
+    driver: local.csi.azure.com
+    volumeAttributes:
+      local.csi.azure.com/selected-initial-node: nvme-node-0
+    volumeHandle: containerstorage#pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: topology.local.csi.azure.com/node
+              operator: In
+              values:
+                - nvme-node-0
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local
+  volumeMode: Filesystem
  ```
 
 ### Webhook Approach
@@ -133,9 +129,9 @@ When the webhook is enabled, instead of setting node affinity on the
 PersistentVolume (PV), the driver adds a
 `local.csi.azure.com/selected-initial-node` parameter to the volume
 context of the PV.
-This parameter is later used by the mutation webhook to modifiy the workload
+This parameter is later used by the mutation webhook to modify the workload
 Pods
-to include preferred node affinity rules to the specifed node ensuring that the
+to include preferred node affinity rules to the specified node ensuring that the
 workload and the PV are scheduled on the same node.
 
 In the event of a node deletion, the workload Pods can be seamlessly rescheduled
@@ -146,41 +142,37 @@ PV resources will be annotated with `"local.csi.azure.com/selected-node"`
 information, which will later be used by the hyperconverged webhook to update
 the node affinity of the workload on future failovers.
 
-### Example
+### Example of PV with Webhook Node Affinity
 
 ```yaml
 apiVersion: v1
 kind: PersistentVolume
-  metadata:
-    annotations:
-      local.csi.azure.com/selected-node: nvme-node-1
-    creationTimestamp: "2025-05-30T22:00:50Z"
-    finalizers:
+metadata:
+  annotations:
+    local.csi.azure.com/selected-node: nvme-node-1
+  finalizers:
     - external-provisioner.volume.kubernetes.io/finalizer
     - kubernetes.io/pv-protection
-    name: pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
-    [...]
-  spec:
-    accessModes:
+  name: pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
+  [...]
+spec:
+  accessModes:
     - ReadWriteOnce
-    capacity:
-      storage: 10Gi
-    claimRef:
-      apiVersion: v1
-      kind: PersistentVolumeClaim
+  capacity:
+    storage: 10Gi
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    [...]
+  csi:
+    driver: local.csi.azure.com
+    volumeAttributes:
+      local.csi.azure.com/selected-initial-node: nvme-node-0
       [...]
-    csi:
-      driver: local.csi.azure.com
-      volumeAttributes:
-        local.csi.azure.com/selected-initial-node: nvme-node-0
-        [...]
-      volumeHandle: containerstorage#pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
-    persistentVolumeReclaimPolicy: Delete
-    storageClassName: local
-    volumeMode: Filesystem
-  status:
-    lastPhaseTransitionTime: "2025-05-30T22:00:50Z"
-    phase: Bound
+    volumeHandle: containerstorage#pvc-d6efb13d-707f-4876-8622-ea7bf2399c14
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local
+  volumeMode: Filesystem
 ```
 
 When mutating hyperconverged webhook is disabled, driver will manage
