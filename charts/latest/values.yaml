@@ -59,6 +59,11 @@ node:
         cpu: 10m
         memory: 64Mi
   driver:
+    webhooks:
+      ephemeral:
+        enabled: true
+      hyperconverged:
+        enabled: true
     args:
     - --nodeName=$(NODE_NAME)
     - --podName=$(POD_NAME)

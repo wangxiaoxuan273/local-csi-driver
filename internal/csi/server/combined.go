@@ -107,6 +107,12 @@ func (s *CombinedServer) Start(ctx context.Context) error {
 	return <-errCh
 }
 
+// NeedLeaderElection returns false since the CSI controllers should run on each
+// node.
+func (s *CombinedServer) NeedLeaderElection() bool {
+	return false
+}
+
 // getLogLevel returns the log level for the given method.
 func getLogLevel(method string) int {
 	if method == "/csi.v1.Identity/Probe" ||

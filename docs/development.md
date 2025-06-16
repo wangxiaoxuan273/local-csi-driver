@@ -28,12 +28,12 @@ adheres to the specified style and quality checks.
 
 To add additional hooks, you can modify the `.pre-commit-config.yaml` file.
 For more details on configuring pre-commit hooks, refer to the
-[official pre-commit documentation](https://pre-commit.com/).
+[official pre-commit documentation][pre-commit].
 
-The most important hook for our project is the [golangci-lint](https://github.com/golangci/golangci-lint)
-hook. It enforces the Go code style and checks for common mistakes. It is configured
-in the `.golangci.yml` file. To see the available linters, refer to the
-[golangci-lint documentation](https://golangci-lint.run/usage/configuration/).
+The most important hook for our project is the [golangci-lint] hook. It enforces
+the Go code style and checks for common mistakes. It is configured in the
+`.golangci.yml` file. To see the available linters, refer to the [golangci-lint
+documentation].
 
 If you receive a comment on a PR that could have been caught by a linter and
 fixed automatically, consider searching for a `pre-commit` hook or `golangci-lint`
@@ -98,17 +98,15 @@ make helm-build
 
 This will create a Helm chart in the `dist` directory. You can then use this
 chart to deploy the project to your Kubernetes cluster. We build the chart using
-[kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) and
-[helmify](https://github.com/arttor/helmify) to convert the Kustomize resources
-into a Helm chart.
+[kubebuilder] and [helmify] to convert the Kustomize resources into a Helm
+chart.
 
 ## Deploying the project
 
 ### Creating a local Kubernetes cluster
 
 Some development can be done in a local Kubernetes cluster. To create a local
-Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/). To create a
-local cluster, run:
+Kubernetes cluster, you can use [kind]. To create a local cluster, run:
 
 ```sh
 make single
@@ -124,7 +122,7 @@ make clean
 ### Creating an AKS cluster
 
 Most of the development is done in an AKS cluster. To create an AKS cluster,
-you can use the make target `aks`. The AKS cluster is created using [bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview?tabs=bicep)
+you can use the make target `aks`. The AKS cluster is created using [bicep].
 
 To create a cluster, run:
 
@@ -137,21 +135,18 @@ For more details on the bicep template and available parameters, refer to the
 
 ### To Deploy
 
-First, install cert-manager in your cluster. You can do this with:
+Build and push the Docker image and Helm chart to your registry
+and Helm repository, respectively. You can do this with:
 
 ```sh
-make cert-manager-install
+REGISTRY=<registry> make docker-build helm-build docker-push helm-push
 ```
 
-This will install cert-manager in your cluster.
-
-Next, you can build and push the Docker image and Helm chart to your registry
-and Helm repository, respectively. You can do this with:
 To deploy the project to your Kubernetes cluster, you can call all the make targets
 in one command:
 
 ```sh
-REGISTRY=<you registry>> make docker-build helm-build docker-push helm-push helm-install
+REGISTRY=<registry> make docker-build helm-build docker-push helm-push helm-install
 ```
 
 This will build the Docker image, push it to the specified registry, build the
@@ -167,14 +162,6 @@ make helm-uninstall
 ```
 
 This will remove the project from your cluster.
-
-To uninstall cert-manager, run:
-
-```sh
-make cert-manager-uninstall
-```
-
-This will remove cert-manager from your cluster.
 
 ## Testing the project
 
@@ -221,9 +208,9 @@ REGISTRY=<registry>.azurecr.io make docker-build helm-build docker-push helm-pus
 This will run the E2E tests in the AKS cluster. The tests are written in Go and
 are chosen with the "aks" and "e2e" label selectors.
 
-You can also run the E2E tests in a local Kubernetes cluster using
-[kind](https://kind.sigs.k8s.io/). To do this, you need to install `kind` and
-create a local cluster. You can do this with:
+You can also run the E2E tests in a local Kubernetes cluster using [kind]. To do
+this, you need to install `kind` and create a local cluster. You can do this
+with:
 
 ```sh
 make single
@@ -234,9 +221,8 @@ to run.
 
 ### External E2E Tests
 
-To run the [external E2E tests](https://github.com/kubernetes/kubernetes/tree/master/test/e2e/storage/external),
-you need to set up a Kubernetes cluster and install the project in it. You can
-do this with:
+To run the [external E2E tests], you need to set up a Kubernetes cluster and
+install the project in it. You can do this with:
 
 ```sh
 REGISTRY=<registry>.azurecr.io make docker-build helm-build docker-push helm-push test-e2e-aks
@@ -244,13 +230,17 @@ REGISTRY=<registry>.azurecr.io make docker-build helm-build docker-push helm-pus
 
 This will run the external E2E tests in the cluster using the AKS cluster. The
 tests are written in Go and use the Ginkgo testing framework. There are two
-kinds of tests, the `lvm` and `lvm-annoation` tests. The `lvm` tests only run
-the generic ephemeral volume tests, which is the only kind of volume permitted
-by default by the driver. The `lvm-annotation` tests run all the tests specified
-by the external tests. It uses [`kyverno`](https://github.com/kyverno/kyverno)
-to add the `local.csi.azure.com/accept-ephemeral-storage: "true"` annotation to
-the persistent volume claim. This allows the tests to test the "accept-ephemeral-storage"
-mode of the driver. The tests are located in the `test/e2e/external` directory.
+kinds of tests, the `lvm` and `lvm-annoation` tests.
+
+The `lvm` tests only run the generic ephemeral volume tests, which is the only
+kind of volume permitted by default by the driver. The `lvm-annotation` tests
+run all the tests specified by the external tests.
+
+It uses [`kyverno`][kyverno] to add the
+`local.csi.azure.com/accept-ephemeral-storage: "true"` annotation to the
+persistent volume claim. This allows the tests to test the
+"accept-ephemeral-storage" mode of the driver. The tests are located in the
+`test/e2e/external` directory.
 
 ### Sanity Tests
 
@@ -260,10 +250,23 @@ To run the sanity tests, run:
 REGISTRY=<registry>.azurecr.io make docker-build helm-build docker-push helm-push test-sanity
 ```
 
-The sanity tests are conformance tests that checks if the driver adheres to the csi
-spec. The tests are written in Go and use the Ginkgo testing framework. The implementation
-can be found in the  [`kubernetes-csi/csi-test`](https://github.com/kubernetes-csi/csi-test)
-repo. The tests are located in the `test/sanity` directory. The tests are run on
-an AKS cluster. If you find a change that you made that breaks the tests, please
-refer to the [`container-storage-interface/spec`](https://github.com/container-storage-interface/spec)
-repo to review the spec.
+The sanity tests are conformance tests that checks if the driver adheres to the
+csi spec. The tests are written in Go and use the Ginkgo testing framework. The
+implementation can be found in the  [`kubernetes-csi/csi-test`][csi-test] repo.
+The tests are located in the `test/sanity` directory.
+
+The tests are run on an AKS cluster. If you find a change that you made that
+breaks the tests, please refer to the
+[`container-storage-interface/spec`][csi-spec] repo to review the spec.
+
+[pre-commit]: https://pre-commit.com
+[golangci-lint]: https://github.com/golangci/golangci-lint
+[golangci-lint documentation]: https://golangci-lint.run/usage/configuration
+[kubebuilder]: https://github.com/kubernetes-sigs/kubebuilder
+[helmify]: https://github.com/arttor/helmify
+[bicep]: https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview?tabs=bicep
+[kind]: https://kind.sigs.k8s.io
+[external E2E tests]: https://github.com/kubernetes/kubernetes/tree/master/test/e2e/storage/external
+[kyverno]: https://github.com/kyverno/kyverno
+[csi-test]: https://github.com/kubernetes-csi/csi-test
+[csi-spec]: https://github.com/container-storage-interface/spec

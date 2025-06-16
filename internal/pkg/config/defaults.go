@@ -23,8 +23,6 @@ func DefaultClusterConfig() *lvmv1alpha1.ClusterConfig {
 			LeaderElect:  new(bool),
 			ResourceName: defaultLeaderElectionName,
 		},
-		Version:                          defaultVersion,
-		EnforceEphemeralPVC:              new(bool),
-		EnforceHyperconvergedWithWebhook: new(bool),
+		Version: defaultVersion,
 	}
 }

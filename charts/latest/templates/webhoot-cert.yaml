@@ -1,0 +1,13 @@
+{{- if or .Values.node.driver.webhooks.ephemeral.enabled .Values.node.driver.webhooks.hyperconverged.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "chart.fullname" . }}-webhook-server-cert
+  labels:
+    app.kubernetes.io/component: webhook
+  {{- include "chart.labels" . | nindent 4 }}
+data:
+   tls.key: ""
+   tls.crt: ""
+   ca-cert.pem: ""
+{{- end }}
