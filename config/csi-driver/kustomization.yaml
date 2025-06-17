@@ -1,8 +1,0 @@
-resources:
-- daemonset.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-images:
-- name: driver
-  newName: laandreaacr.azurecr.io/local-csi-driver/driver
-  newTag: 0.0.0-7b55e55-dirty
