@@ -29,7 +29,7 @@ the workload remains operational and can continue to write new data.
 ## Configuration
 
 Both of the webhooks are optional and can be enabled or disabled via the
-appropriate values for `.Values.node.driver.webhooks` in the Helm chart.
+appropriate values for `.Values.webhook` in the Helm chart.
 
 ## Validation (Emphemeral) Webhook
 
