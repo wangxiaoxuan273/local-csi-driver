@@ -306,7 +306,7 @@ helm-show-values: helm ## Show the default values of the Helm chart.
 
 .PHONY: uninstall-helm
 uninstall-helm: helm ## Uninstall the Helm chart from the K8s cluster specified in ~/.kube/config.
-	$(HELM) uninstall local-csi-driver --namespace local-csi --debug --wait --ignore-not-found
+	$(HELM) uninstall local-csi-driver --namespace kube-system --debug --wait --ignore-not-found
 
 .PHONY: deploy
 deploy: manifests helm ## Deploy to the K8s cluster specified in ~/.kube/config.
