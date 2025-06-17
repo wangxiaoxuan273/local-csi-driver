@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	// namespace is the namespace where the cns components are deployed.
-	namespace = "cns-system"
+	// namespace is the namespace where the local-csi-driver components are
+	// deployed.
+	namespace = "kube-system"
 	// controllerDs is the resource name used in kubectl commands for the node.
 	controllerDs = "daemonsets/local-csi-driver-node"
 )

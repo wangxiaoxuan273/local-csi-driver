@@ -294,11 +294,10 @@ HELM_ARGS ?=
 .PHONY: helm
 helm-install: helm ## Install the Helm chart from REGISTRY into the K8s cluster specified in ~/.kube/config.
 	$(HELM) install local-csi-driver oci://$(CHART_IMG) \
-		--namespace cns-system \
+		--namespace kube-system \
 		--version $(TAG) \
 		--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
 		--set node.driver.image.tag=$(TAG) \
-		--create-namespace \
 		--debug --wait --atomic $(HELM_ARGS)
 
 .PHONY: helm-show-values
@@ -307,16 +306,15 @@ helm-show-values: helm ## Show the default values of the Helm chart.
 
 .PHONY: uninstall-helm
 uninstall-helm: helm ## Uninstall the Helm chart from the K8s cluster specified in ~/.kube/config.
-	$(HELM) uninstall local-csi-driver --namespace cns-system --debug --wait --ignore-not-found
+	$(HELM) uninstall local-csi-driver --namespace local-csi --debug --wait --ignore-not-found
 
 .PHONY: deploy
 deploy: manifests helm ## Deploy to the K8s cluster specified in ~/.kube/config.
 	$(HELM) install local-csi-driver charts/latest \
-		--namespace cns-system \
+		--namespace kube-system \
 		--version $(TAG) \
 		--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
 		--set node.driver.image.tag=$(TAG) \
-		--create-namespace \
 		--debug --wait --atomic $(HELM_ARGS)
 
 .PHONY: undeploy

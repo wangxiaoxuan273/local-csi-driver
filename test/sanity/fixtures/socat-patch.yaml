@@ -1,6 +1,6 @@
 # This patch will add a socat container to the pod that listens on TCP port 10000 and forwards the traffic to the CSI
 # socket. This is useful for debugging the CSI driver using the csi-sanity tool.
-# Example: kubectl patch deployments.apps -n cns-system cns-cluster-manager --patch-file ./test/sanity/fixtures/agent-patch.yaml
+# Example: kubectl patch deployments.apps -n kube-system cns-cluster-manager --patch-file ./test/sanity/fixtures/agent-patch.yaml
 spec:
   template:
     spec:
