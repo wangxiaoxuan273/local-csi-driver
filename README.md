@@ -1,7 +1,6 @@
 # local-csi-driver
 
-The local-csi-driver provides access to local NVMe storage from Kubernetes on
-Azure.
+The local-csi-driver provides access to local NVMe disks on Kubernetes clusters.
 
 ## Getting Started
 

@@ -325,7 +325,7 @@ func main() {
 	}
 
 	// Create the CSI server.
-	removePvNodeAffinity := ephemeralCreateWebhookConfig != ""
+	removePvNodeAffinity := hyperconvergedWebhookConfig != ""
 
 	csiServer, err := server.NewCombined(csiAddr, driver.NewCombined(nodeName, volumeClient, mgr.GetClient(), removePvNodeAffinity, recorder, tp), t)
 	if err != nil {
