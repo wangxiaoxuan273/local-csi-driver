@@ -2,19 +2,21 @@
 apiVersion: troubleshoot.sh/v1beta2
 kind: SupportBundle
 metadata:
-  name: cns-support-bundle
+  name: local-csi-driver
 spec:
   collectors:
     - clusterResources:
         namespaces:
-        - cns-system
+        - kube-system
     - helm:
-        namespace: cns-system
+        namespace: kube-system
         includeSecrets: false
         collectValues: true
     - logs:
         name: logs
-        namespace: cns-system
+        selector:
+          - control-plane=local-csi-driver
+        namespace: kube-system
         limits:
           maxAge: 720h
           maxLines: 10000
@@ -22,7 +24,7 @@ spec:
         collectorName: lsblk
         selector:
           - control-plane=local-csi-driver
-        namespace: cns-system
+        namespace: kube-system
         command: ["/bin/sh", "-c"]
         args: ["lsblk --json --output-all"]
         timeout: 5s
@@ -30,7 +32,7 @@ spec:
         collectorName: pvs
         selector:
           - control-plane=local-csi-driver
-        namespace: cns-system
+        namespace: kube-system
         command: ["/bin/sh", "-c"]
         args: ["pvs --reportformat=json --binary --unit=B --options=pv_all,vg_name"]
         timeout: 5s
@@ -38,7 +40,7 @@ spec:
         collectorName: vgs
         selector:
           - control-plane=local-csi-driver
-        namespace: cns-system
+        namespace: kube-system
         command: ["/bin/sh", "-c"]
         args: ["vgs --reportformat=json --binary --unit=B --options=vg_all"]
         timeout: 5s
@@ -46,7 +48,7 @@ spec:
         collectorName: lvs
         selector:
           - control-plane=local-csi-driver
-        namespace: cns-system
+        namespace: kube-system
         command: ["/bin/sh", "-c"]
         args: ["lvs --reportformat=json --binary --unit=B --options=lv_all,seg_all,vg_name"]
         timeout: 5s

@@ -40,4 +40,4 @@ fi
 
 az k8s-extension create --cluster-type managedClusters --cluster-name ${CLUSTER_NAME} \
     --resource-group ${RESOURCE_GROUP} --name cns --extension-type microsoft.azstor \
-    --scope cluster --release-train ${RELEASE_TRAIN} --release-namespace cns-system
+    --scope cluster --release-train ${RELEASE_TRAIN} --release-namespace kube-system

@@ -220,8 +220,8 @@ func Teardown(ctx context.Context, namespace string) {
 		}).WithContext(ctx).Should(Succeed(), "Namespace deletion failed")
 	}
 
-	// Teardown Prometheus and CertManager after the suite if not skipped and if
-	// they were not already installed.
+	// Teardown Prometheus after the suite if not skipped and if it was not
+	// already installed.
 	if !skipPrometheusInstall && !isPrometheusOperatorAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling Prometheus Operator...\n")
 		utils.UninstallPrometheusOperator(ctx)

@@ -21,7 +21,7 @@ import (
 	"local-csi-driver/test/pkg/common"
 )
 
-const namespace = "cns-system"
+const namespace = "kube-system"
 
 var (
 

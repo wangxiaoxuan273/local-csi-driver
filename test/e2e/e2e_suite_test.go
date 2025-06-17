@@ -20,7 +20,7 @@ import (
 	_ "local-csi-driver/test/scale"
 )
 
-const namespace = "cns-system"
+const namespace = "kube-system"
 
 var (
 	// defaultKubeConfigPath is the default path to the kubeconfig file.

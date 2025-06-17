@@ -29,7 +29,7 @@ components using kubectl:
 
 ```sh
 # View logs
-kubectl logs -n cns-system  daemonsets/local-csi-driver-node --prefix --all-containers
+kubectl logs -n kube-system  daemonsets/local-csi-driver-node --prefix --all-containers
 ```
 
 ### Checking Kubernetes Events
@@ -38,10 +38,10 @@ Kubernetes events provide valuable information about what's happening in the clu
 
 ```sh
 # View all events in the namespace
-kubectl get events -n cns-system
+kubectl get events -n kube-system
 
 # Watch events in real-time
-kubectl get events -n cns-system --watch
+kubectl get events -n kube-system --watch
 
 # Filter events related to PVCs
 kubectl get events -n <namespace> --field-selector involvedObject.kind=PersistentVolumeClaim
@@ -74,13 +74,13 @@ If your PVC is stuck in the "Pending" state:
 4. Check if the driver is running properly:
 
    ```sh
-   kubectl get pods -n cns-system
+   kubectl get pods -n kube-system -l control-plane=local-csi-driver
    ```
 
 5. Check the driver logs for any errors:
 
    ```sh
-   kubectl logs -n cns-system  daemonsets/local-csi-driver-node --prefix --all-containers
+   kubectl logs -n kube-system  daemonsets/local-csi-driver-node --prefix --all-containers
    ```
 
 ### Volume Mount Failures
@@ -96,7 +96,7 @@ If pods cannot mount volumes:
 2. Check if the driver pods are running on all nodes:
 
    ```sh
-   kubectl get pods -n cns-system -o wide
+   kubectl get pods -n kube-system -l control-plane=local-csi-driver -o wide
    ```
 
 3. Verify the PV status:

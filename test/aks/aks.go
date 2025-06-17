@@ -40,7 +40,7 @@ const (
 )
 
 var (
-	namespace            = "cns-system"
+	namespace            = "kube-system"
 	applicationNamespace = "workload-" + utils.RandomTag()
 	tc                   testContext
 

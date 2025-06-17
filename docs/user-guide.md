@@ -21,7 +21,7 @@ To install Helm, please follow the official [Helm installation guide](https://he
 To install local-csi-driver using Helm:
 
    ```sh
-   helm install local-csi-driver oci://localcsidriver.azurecr.io/local-csi-driver/local-csi-driver --version 0.0.1-latest --namespace cns-system --create-namespace --wait --atomic
+   helm install local-csi-driver oci://localcsidriver.azurecr.io/local-csi-driver/local-csi-driver --version 0.0.1-latest --namespace kube-system --wait --atomic
    ```
 
 ## Creating a StorageClass
