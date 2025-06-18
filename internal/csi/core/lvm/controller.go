@@ -23,6 +23,7 @@ import (
 	"local-csi-driver/internal/pkg/convert"
 	"local-csi-driver/internal/pkg/events"
 	"local-csi-driver/internal/pkg/lvm"
+	"local-csi-driver/internal/pkg/probe"
 )
 
 const (
@@ -298,6 +299,10 @@ func (l *LVM) AvailableCapacity(ctx context.Context, vgName string) (int64, erro
 	// total size of all disks matching the device filter.
 	devices, err := l.probe.ScanDevices(ctx, log)
 	if err != nil {
+		if errors.Is(err, probe.ErrNoDevicesFound) || errors.Is(err, probe.ErrNoDevicesMatchingFilter) {
+			span.SetStatus(codes.Ok, "no devices found matching filter")
+			return 0, nil
+		}
 		span.SetStatus(codes.Error, "failed to scan devices")
 		span.RecordError(err)
 		return 0, fmt.Errorf("failed to scan devices: %w", err)
