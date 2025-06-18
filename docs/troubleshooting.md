@@ -74,7 +74,7 @@ If your PVC is stuck in the "Pending" state:
 4. Check if the driver is running properly:
 
    ```sh
-   kubectl get pods -n kube-system -l control-plane=local-csi-driver
+   kubectl get pods -n kube-system -l app=csi-local-node
    ```
 
 5. Check the driver logs for any errors:
@@ -96,7 +96,7 @@ If pods cannot mount volumes:
 2. Check if the driver pods are running on all nodes:
 
    ```sh
-   kubectl get pods -n kube-system -l control-plane=local-csi-driver -o wide
+   kubectl get pods -n kube-system -l app=csi-local-node -o wide
    ```
 
 3. Verify the PV status:

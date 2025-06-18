@@ -2,14 +2,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "chart.fullname" . }}-webhook-service
+  name: {{ .Values.name }}-webhook-service
   labels:
     app.kubernetes.io/component: webhook
   {{- include "chart.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.webhook.service.type }}
   selector:
-    control-plane: local-csi-driver
+    app: {{ .Values.name }}
     {{- include "chart.selectorLabels" . | nindent 4 }}
   ports:
   {{- .Values.webhook.service.ports | toYaml | nindent 2 }}

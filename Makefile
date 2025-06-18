@@ -296,8 +296,8 @@ helm-install: helm ## Install the Helm chart from REGISTRY into the K8s cluster 
 	$(HELM) install local-csi-driver oci://$(CHART_IMG) \
 		--namespace kube-system \
 		--version $(TAG) \
-		--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
-		--set node.driver.image.tag=$(TAG) \
+		--set image.driver.repository=$(REGISTRY)/$(REPO) \
+		--set image.driver.tag=$(TAG) \
 		--debug --wait --atomic $(HELM_ARGS)
 
 .PHONY: helm-show-values
@@ -313,8 +313,8 @@ deploy: manifests helm ## Deploy to the K8s cluster specified in ~/.kube/config.
 	$(HELM) install local-csi-driver charts/latest \
 		--namespace kube-system \
 		--version $(TAG) \
-		--set node.driver.image.repository=$(REGISTRY)/$(REPO) \
-		--set node.driver.image.tag=$(TAG) \
+		--set image.driver.repository=$(REGISTRY)/$(REPO) \
+		--set image.driver.tag=$(TAG) \
 		--debug --wait --atomic $(HELM_ARGS)
 
 .PHONY: undeploy

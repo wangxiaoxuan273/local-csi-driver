@@ -369,7 +369,7 @@ func VerifyDriverUp(ctx context.Context, namespace string) {
 	verifyNodeUp := func(g Gomega) {
 		// Get the name of the node pod.
 		cmd := exec.CommandContext(ctx, "kubectl", "get",
-			"daemonset", "-l", "control-plane=local-csi-driver",
+			"daemonset", "-l", "app=csi-local-node",
 			"-o", "go-template={{ range .items }}"+
 				"{{ if not .metadata.deletionTimestamp }}"+
 				"{{ .metadata.name }}"+

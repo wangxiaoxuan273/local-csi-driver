@@ -1,5 +1,35 @@
+# Name used for creating resources.
+name: csi-local
+
+image:
+  baseRepo: mcr.microsoft.com
+  driver:
+    repository: /acstor/local-csi-driver
+    tag:
+    pullPolicy: IfNotPresent
+  csiProvisioner:
+    repository: /oss/v2/kubernetes-csi/csi-provisioner
+    tag: v5.2.0
+    pullPolicy: IfNotPresent
+  csiAttacher:
+    repository: /oss/v2/kubernetes-csi/csi-attacher
+    tag: v4.8.1
+    pullPolicy: IfNotPresent
+  csiResizer:
+    repository: /oss/v2/kubernetes-csi/csi-resizer
+    tag: v1.13.2
+    pullPolicy: IfNotPresent
+  livenessProbe:
+    repository: /oss/v2/kubernetes-csi/livenessprobe
+    tag: v2.15.0
+    pullPolicy: IfNotPresent
+  nodeDriverRegistrar:
+    repository: /oss/v2/kubernetes-csi/csi-node-driver-registrar
+    tag: v2.13.0
+    pullPolicy: IfNotPresent
+
 kubernetesClusterDomain: cluster.local
-node:
+daemonset:
   csiProvisioner:
     args:
     - --v=2
@@ -17,10 +47,6 @@ node:
     - --enable-capacity
     - --capacity-ownerref-level=1
     - --capacity-poll-interval=15s
-    image:
-      repository: mcr.microsoft.com/oss/kubernetes-csi/csi-provisioner
-      tag: v5.1.0
-    imagePullPolicy: IfNotPresent
     resources:
       limits:
         cpu: 100m
@@ -34,10 +60,6 @@ node:
     - --csi-address=/csi/lvm.sock
     - --kubelet-registration-path=/var/lib/kubelet/plugins/cns.io/lvm.sock
     - --http-endpoint=:8091
-    image:
-      repository: mcr.microsoft.com/oss/kubernetes-csi/csi-node-driver-registrar
-      tag: v2.12.0
-    imagePullPolicy: IfNotPresent
     resources:
       limits:
         cpu: 100m
@@ -88,10 +110,6 @@ node:
     - --http-endpoint=0.0.0.0:29756
     env:
       address: /csi/lvm.sock
-    image:
-      repository: mcr.microsoft.com/oss/kubernetes-csi/csi-resizer
-      tag: v1.13.2
-    imagePullPolicy: IfNotPresent
     resources:
       limits:
         memory: 500Mi
