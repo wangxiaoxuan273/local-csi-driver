@@ -43,7 +43,6 @@ import (
 	"local-csi-driver/internal/pkg/version"
 	"local-csi-driver/internal/webhook/hyperconverged"
 	"local-csi-driver/internal/webhook/pvc"
-	// +kubebuilder:scaffold:imports
 )
 
 const (
@@ -62,8 +61,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	// +kubebuilder:scaffold:scheme
 }
 
 //nolint:gocyclo
@@ -315,8 +312,6 @@ func main() {
 	if err != nil {
 		logAndExit(err, "unable to setup volume client with manager")
 	}
-
-	// +kubebuilder:scaffold:builder
 
 	recorder := events.NewNoopRecorder()
 	if eventRecorderEnabled {

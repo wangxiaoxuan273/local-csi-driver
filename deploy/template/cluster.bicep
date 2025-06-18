@@ -78,7 +78,6 @@ resource aks 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
     name: 'Base'
     tier: 'Standard'
   }
-  tags: resourceGroup().tags
   properties: {
     nodeResourceGroup: '${resourceGroup().name}-node-rg'
     dnsPrefix: '${resourceGroup().name}-dns'

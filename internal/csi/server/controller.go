@@ -36,8 +36,6 @@ type ControllerServer struct {
 	tp     trace.TracerProvider
 }
 
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=csidrivers,verbs=get;list;watch;create;update;patch;delete
-
 // NewControllerServer creates a new CSI server for running in the manager.
 //
 // The server will listen on the provided endpoint and use the provided driver

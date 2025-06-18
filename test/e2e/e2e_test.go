@@ -60,8 +60,6 @@ var _ = Describe("Local CSI Driver", Label("e2e"), Ordered, func() {
 			}
 			Eventually(verifyCAInjection).Should(Succeed())
 		})
-
-		// +kubebuilder:scaffold:e2e-webhooks-checks
 	})
 
 	// TODO: these tests require diskpools and storagepools to be created on cluster prior to running.

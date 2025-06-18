@@ -44,7 +44,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	// +kubebuilder:scaffold:scheme
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 }
 
