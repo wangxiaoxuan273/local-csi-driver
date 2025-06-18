@@ -29,7 +29,7 @@ components using kubectl:
 
 ```sh
 # View logs
-kubectl logs -n kube-system  daemonsets/local-csi-driver-node --prefix --all-containers
+kubectl logs -n kube-system daemonsets/csi-local-node --prefix --all-containers
 ```
 
 ### Checking Kubernetes Events
@@ -48,6 +48,17 @@ kubectl get events -n <namespace> --field-selector involvedObject.kind=Persisten
 ```
 
 ## Common Issues
+
+### Helm Installation Failure
+
+If the helm installation fails with an error similar to:
+
+```log
+Error: INSTALLATION FAILED: Unable to continue with install: ServiceAccount "csi-local-node" in namespace "kube-system" exists and cannot be imported into the current release: invalid ownership metadata; annotation validation error: key "meta.helm.sh/release-name" must equal "local-csi-driver-2nd-install": current value is "local-csi-driver"
+```
+
+Check that local-csi-driver is not already installed. There can only be one
+instance installed per Kubernetes cluster.
 
 ### PVC Creation Stuck in Pending State
 
@@ -80,7 +91,7 @@ If your PVC is stuck in the "Pending" state:
 5. Check the driver logs for any errors:
 
    ```sh
-   kubectl logs -n kube-system  daemonsets/local-csi-driver-node --prefix --all-containers
+   kubectl logs -n kube-system  daemonsets/csi-local-node --prefix --all-containers
    ```
 
 ### Volume Mount Failures

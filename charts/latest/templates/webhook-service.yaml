@@ -9,7 +9,7 @@ metadata:
 spec:
   type: {{ .Values.webhook.service.type }}
   selector:
-    app: {{ .Values.name }}
+    app: {{ .Values.name }}-node
     {{- include "chart.selectorLabels" . | nindent 4 }}
   ports:
   {{- .Values.webhook.service.ports | toYaml | nindent 2 }}

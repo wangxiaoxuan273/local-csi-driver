@@ -369,7 +369,7 @@ func VerifyDriverUp(ctx context.Context, namespace string) {
 	verifyNodeUp := func(g Gomega) {
 		// Get the name of the node pod.
 		cmd := exec.CommandContext(ctx, "kubectl", "get",
-			"daemonset", "-l", "app=csi-local-node",
+			"daemonset", "-l", "app=csi-local",
 			"-o", "go-template={{ range .items }}"+
 				"{{ if not .metadata.deletionTimestamp }}"+
 				"{{ .metadata.name }}"+
@@ -384,7 +384,7 @@ func VerifyDriverUp(ctx context.Context, namespace string) {
 		g.Expect(daemonsets).To(HaveLen(1), "Expected exactly one daemonset, got %d", len(daemonsets))
 
 		daemonsetName := daemonsets[0]
-		g.Expect(daemonsetName).To(ContainSubstring("node"))
+		g.Expect(daemonsetName).To(ContainSubstring("csi-local-node"), "Daemonset name does not match expected pattern")
 
 		cmd = exec.CommandContext(ctx, "kubectl", "get",
 			"daemonset", daemonsetName,
@@ -401,7 +401,7 @@ func VerifyDriverUp(ctx context.Context, namespace string) {
 		g.Expect(readyCount[0]).To(Equal(readyCount[1]), fmt.Sprintf("Not all daemonset pods are ready: %s/%s", readyCount[0], readyCount[1]))
 
 		// Verify that webhooks are available.
-		cmd = exec.CommandContext(ctx, "kubectl", "get", "endpoints", "local-csi-driver-webhook-service",
+		cmd = exec.CommandContext(ctx, "kubectl", "get", "endpoints", "csi-local-webhook-service",
 			"-n", namespace, "-o", "jsonpath={.subsets[*].addresses[*].ip}")
 		output, err = utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve webhook service endpoints")

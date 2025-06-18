@@ -24,6 +24,8 @@ To install local-csi-driver using Helm:
    helm install local-csi-driver oci://localcsidriver.azurecr.io/local-csi-driver/local-csi-driver --version 0.0.1-latest --namespace kube-system --wait --atomic
    ```
 
+Only one instance of local-csi-driver can be installed per cluster.
+
 ## Creating a StorageClass
 
 To create a StorageClass for the local-csi-driver, apply the following YAML:
