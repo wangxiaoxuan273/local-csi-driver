@@ -90,7 +90,9 @@ var _ = BeforeSuite(func() {
 	By("writing webhook configuration to file")
 	cfgDir, err := os.MkdirTemp(os.TempDir(), "hyperconverged")
 	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(cfgDir)
+	defer func() {
+		Expect(os.RemoveAll(cfgDir)).To(Succeed(), "failed to remove temporary directory %s", cfgDir)
+	}()
 	err = os.WriteFile(filepath.Join(cfgDir, "webhook.yaml"), []byte(config), 0644)
 	Expect(err).NotTo(HaveOccurred())
 
