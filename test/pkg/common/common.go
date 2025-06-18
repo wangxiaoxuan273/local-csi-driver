@@ -86,11 +86,6 @@ func Setup(ctx context.Context, namespace string) {
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to run make generate")
 
-	By("generating manifests")
-	cmd = exec.CommandContext(ctx, "make", "manifests")
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to run make manifests")
-
 	isKindClusterCreated = kind.IsClusterCreated()
 
 	if createCluster && isKindClusterCreated {

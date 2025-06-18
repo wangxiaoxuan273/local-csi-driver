@@ -78,13 +78,6 @@ help: ## Display this help.
 
 ##@ Development
 
-.PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	$(CONTROLLER_GEN) rbac:roleName=node-role \
-		paths="./..." \
-		output:dir=config/rbac
-
 .PHONY: generate
 generate: mocks controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations and mock interfaces.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -102,7 +95,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate envtest go-junit-report gocov gocov-xml ## Run tests and generate coverage report
+test: generate envtest go-junit-report gocov gocov-xml ## Run tests and generate coverage report
 	$(eval TMP := $(shell mktemp -d))
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 		go test -race -v -p 8 $$(go list ./... | grep -v -e /test/) -coverprofile $(TMP)/cover.out 2>&1 | \
@@ -112,14 +105,17 @@ test: manifests generate envtest go-junit-report gocov gocov-xml ## Run tests an
 	@rm $(TMP)/cover.out $(TMP)/cover.clean && rmdir $(TMP)
 
 
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
-# Prometheus and CertManager and Jaeger are installed by default if they not
-# already installed. Skip install with:
+# The default setup assumes Kind is pre-installed and builds/loads the Docker
+# image locally. Prometheus and Jaeger are installed by default if they not
+# already installed.
+#
+# Skip install with:
 # - SKIP_INSTALL_PROMETHEUS=true
+#
 # To avoid uninstalling everything after the tests, use:
 # - SKIP_UNINSTALL=true
 .PHONY: e2e
-e2e: ginkgo manifests generate ## Run the e2e tests (developers).
+e2e: ginkgo generate ## Run the e2e tests (developers).
 	SKIP_UNINSTALL=true \
 	SKIP_SANITY=true \
 	SKIP_SCALE=true \
@@ -128,41 +124,41 @@ e2e: ginkgo manifests generate ## Run the e2e tests (developers).
 	$(call run_tests,e2e,./test/e2e)
 
 .PHONY: test-e2e
-test-e2e: ginkgo manifests generate ## Run the e2e tests.
+test-e2e: ginkgo generate ## Run the e2e tests.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS) --fail-fast)
 	$(call run_tests,e2e && !aks,./test/e2e,$(ARGS),)
 
 .PHONY: test-e2e-aks
-test-e2e-aks: ginkgo manifests generate ## Run the e2e tests on AKS.
+test-e2e-aks: ginkgo generate ## Run the e2e tests on AKS.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS) --fail-fast)
 	$(call run_tests,e2e,./test/e2e,$(ARGS),)
 
 .PHONY: test-sanity
-test-sanity: ginkgo manifests generate ## Run the sanity tests.
+test-sanity: ginkgo generate ## Run the sanity tests.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS))
 	$(if $(findstring --dry-run,$(ADDITIONAL_GINKGO_FLAGS)), , $(eval ARGS := $(ARGS) --procs=16))
 	$(call run_tests,sanity,./test/sanity,$(ARGS),)
 
 .PHONY: test-external-e2e
-test-external-e2e: ginkgo manifests generate ## Run the external e2e tests.
+test-external-e2e: ginkgo generate ## Run the external e2e tests.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS))
 	$(if $(findstring --dry-run,$(ADDITIONAL_GINKGO_FLAGS)), , $(eval ARGS := $(ARGS) --procs=16))
 	$(call run_tests,external-e2e && !Disruptive,./test/external,$(ARGS),)
 
 .PHONY: test-scale
-test-scale: ginkgo manifests generate ## Run the scale tests.
+test-scale: ginkgo generate ## Run the scale tests.
 	$(call run_tests,scale && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--scale=$(SCALE))
 
 .PHONY: test-restart
-test-restart: ginkgo manifests generate ## Run the restart tests.
+test-restart: ginkgo generate ## Run the restart tests.
 	$(call run_tests,restart && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--repeat=$(REPEAT))
 
 .PHONY: test-upgrade
-test-upgrade: ginkgo manifests generate ## Run the upgrade tests.
+test-upgrade: ginkgo generate ## Run the upgrade tests.
 	$(call run_tests,upgrade && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--repeat=$(REPEAT))
 
 .PHONY: test-scaledown
-test-scaledown: ginkgo manifests generate ## Run the scale down tests.
+test-scaledown: ginkgo generate ## Run the scale down tests.
 	$(call run_tests,scaledown && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--repeat=$(REPEAT))
 
 define run_tests
@@ -188,11 +184,11 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes.
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build binary.
+build: generate fmt vet ## Build binary.
 	go build -ldflags "$(LDFLAGS)" -o bin/local-csi-driver cmd/main.go
 
 .PHONY: run
-run: manifests generate fmt vet ## Run the local CSI driver from your host.
+run: generate fmt vet ## Run the local CSI driver from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
@@ -248,7 +244,7 @@ docker-lint: hadolint
 	$(HADOLINT) Dockerfile
 
 .PHONY: helm-build
-helm-build: helm manifests generate ## Generate a consolidated Helm chart with CRDs and deployment.
+helm-build: helm generate ## Generate a consolidated Helm chart with CRDs and deployment.
 	cp charts/latest/Chart.yaml charts/latest/Chart.yaml.bak
 	./hack/fix-helm-chart.sh --chart charts/latest --version $(TAG)
 	$(HELM) package --dependency-update charts/latest -d dist --version $(TAG)
@@ -309,7 +305,7 @@ uninstall-helm: helm ## Uninstall the Helm chart from the K8s cluster specified 
 	$(HELM) uninstall local-csi-driver --namespace kube-system --debug --wait --ignore-not-found
 
 .PHONY: deploy
-deploy: manifests helm ## Deploy to the K8s cluster specified in ~/.kube/config.
+deploy: helm ## Deploy to the K8s cluster specified in ~/.kube/config.
 	$(HELM) install local-csi-driver charts/latest \
 		--namespace kube-system \
 		--version $(TAG) \
@@ -362,7 +358,7 @@ add-copyright:
 	./hack/add_copyright.sh
 
 .PHONY: single
-single: manifests kind ## Create a single node kind cluster.
+single: kind ## Create a single node kind cluster.
 	if $(KIND) get clusters | grep -q kind; then \
 		echo "Cluster 'kind' already exists"; \
 	else \
@@ -370,7 +366,7 @@ single: manifests kind ## Create a single node kind cluster.
 	fi
 
 .PHONY: multi
-multi: manifests kind ## Create a multi node kind cluster.
+multi: kind ## Create a multi node kind cluster.
 	if $(KIND) get clusters | grep -q kind; then \
 		echo "Cluster 'kind' already exists"; \
 	else \
@@ -405,7 +401,6 @@ $(LOCALBIN):
 
 ## Tool Binaries
 KUBECTL ?= kubectl
-KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 MOCK_GEN ?= $(LOCALBIN)/mockgen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
@@ -422,7 +417,6 @@ BICEP ?= $(LOCALBIN)/bicep
 HELM ?= $(LOCALBIN)/helm
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.5.0
 CONTROLLER_TOOLS_VERSION ?= v0.16.5
 GOMOCK_VERSION ?= v0.5.2
 ENVTEST_VERSION ?= release-0.19
@@ -442,11 +436,6 @@ BICEP_VERSION ?= v0.32.4
 HELM_VERSION ?= v3.16.4
 MARKDOWNLINT_CLI_VERSION ?= v0.44.0
 
-.PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
-$(KUSTOMIZE): $(LOCALBIN)
-	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
-
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
@@ -463,7 +452,7 @@ $(ENVTEST): $(LOCALBIN)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
 
 .PHONY: kind
-kind: $(KIND) ## Download kustomize locally if necessary.
+kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
 

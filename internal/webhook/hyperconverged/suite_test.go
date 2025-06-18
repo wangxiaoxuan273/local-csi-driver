@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -32,6 +33,10 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+const (
+	namespace = "test-namespace"
+)
+
 var (
 	cfg          *rest.Config
 	testEnv      *envtest.Environment
@@ -41,9 +46,32 @@ var (
 	cancel       context.CancelFunc
 )
 
-const (
-	namespace = "test-namespace"
-)
+var config = `
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: hyperconverged-webhook
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: kube-system
+      path: /mutate-pod
+  failurePolicy: Fail # Set to fail for tests.
+  name: hyperconverged.local.csi.azure.com
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods
+  sideEffects: None
+`
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
@@ -57,15 +85,24 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	ctx, cancel = context.WithCancel(context.TODO())
 
-	By("bootstrapping test environment")
 	var err error
 
+	By("writing webhook configuration to file")
+	cfgDir, err := os.MkdirTemp(os.TempDir(), "hyperconverged")
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		Expect(os.RemoveAll(cfgDir)).To(Succeed(), "failed to remove temporary directory %s", cfgDir)
+	}()
+	err = os.WriteFile(filepath.Join(cfgDir, "webhook.yaml"), []byte(config), 0644)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("bootstrapping test environment")
 	err = kscheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	testEnv = &envtest.Environment{
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook", "hyperconverged")},
+			Paths: []string{cfgDir},
 		},
 		AttachControlPlaneOutput: false,
 	}
@@ -122,7 +159,7 @@ var _ = BeforeSuite(func() {
 	hyperconvergedHandler, err := NewHandler(namespace, mgr.GetClient(), mgr.GetScheme())
 	Expect(err).NotTo(HaveOccurred(), "failed to create hyperconverged controller")
 
-	mgr.GetWebhookServer().Register("/mutate-hyperconverged-pods", &webhook.Admission{Handler: hyperconvergedHandler})
+	mgr.GetWebhookServer().Register("/mutate-pod", &webhook.Admission{Handler: hyperconvergedHandler})
 
 	go func() {
 		defer GinkgoRecover()
