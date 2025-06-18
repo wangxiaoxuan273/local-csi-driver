@@ -96,10 +96,8 @@ To build the Helm chart, run:
 make helm-build
 ```
 
-This will create a Helm chart in the `dist` directory. You can then use this
-chart to deploy the project to your Kubernetes cluster. We build the chart using
-[kubebuilder] and [helmify] to convert the Kustomize resources into a Helm
-chart.
+This will package a helm chart for the project and place it in the `dist`
+directory.
 
 ## Deploying the project
 
@@ -262,8 +260,6 @@ breaks the tests, please refer to the
 [pre-commit]: https://pre-commit.com
 [golangci-lint]: https://github.com/golangci/golangci-lint
 [golangci-lint documentation]: https://golangci-lint.run/usage/configuration
-[kubebuilder]: https://github.com/kubernetes-sigs/kubebuilder
-[helmify]: https://github.com/arttor/helmify
 [bicep]: https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview?tabs=bicep
 [kind]: https://kind.sigs.k8s.io
 [external E2E tests]: https://github.com/kubernetes/kubernetes/tree/master/test/e2e/storage/external

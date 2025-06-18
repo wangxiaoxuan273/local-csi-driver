@@ -78,10 +78,6 @@ help: ## Display this help.
 
 ##@ Development
 
-.PHONY: generate
-generate: mocks controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations and mock interfaces.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
-
 .PHONY: mocks
 mocks: mockgen ## Generate mocks for the interfaces.
 	@PATH="$(LOCALBIN):$(PATH)" go generate ./...
@@ -95,7 +91,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: generate envtest go-junit-report gocov gocov-xml ## Run tests and generate coverage report
+test: envtest go-junit-report gocov gocov-xml ## Run tests and generate coverage report
 	$(eval TMP := $(shell mktemp -d))
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 		go test -race -v -p 8 $$(go list ./... | grep -v -e /test/) -coverprofile $(TMP)/cover.out 2>&1 | \
@@ -115,7 +111,7 @@ test: generate envtest go-junit-report gocov gocov-xml ## Run tests and generate
 # To avoid uninstalling everything after the tests, use:
 # - SKIP_UNINSTALL=true
 .PHONY: e2e
-e2e: ginkgo generate ## Run the e2e tests (developers).
+e2e: ginkgo ## Run the e2e tests (developers).
 	SKIP_UNINSTALL=true \
 	SKIP_SANITY=true \
 	SKIP_SCALE=true \
@@ -124,41 +120,41 @@ e2e: ginkgo generate ## Run the e2e tests (developers).
 	$(call run_tests,e2e,./test/e2e)
 
 .PHONY: test-e2e
-test-e2e: ginkgo generate ## Run the e2e tests.
+test-e2e: ginkgo ## Run the e2e tests.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS) --fail-fast)
 	$(call run_tests,e2e && !aks,./test/e2e,$(ARGS),)
 
 .PHONY: test-e2e-aks
-test-e2e-aks: ginkgo generate ## Run the e2e tests on AKS.
+test-e2e-aks: ginkgo ## Run the e2e tests on AKS.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS) --fail-fast)
 	$(call run_tests,e2e,./test/e2e,$(ARGS),)
 
 .PHONY: test-sanity
-test-sanity: ginkgo generate ## Run the sanity tests.
+test-sanity: ginkgo ## Run the sanity tests.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS))
 	$(if $(findstring --dry-run,$(ADDITIONAL_GINKGO_FLAGS)), , $(eval ARGS := $(ARGS) --procs=16))
 	$(call run_tests,sanity,./test/sanity,$(ARGS),)
 
 .PHONY: test-external-e2e
-test-external-e2e: ginkgo generate ## Run the external e2e tests.
+test-external-e2e: ginkgo ## Run the external e2e tests.
 	$(eval ARGS := $(ADDITIONAL_GINKGO_FLAGS))
 	$(if $(findstring --dry-run,$(ADDITIONAL_GINKGO_FLAGS)), , $(eval ARGS := $(ARGS) --procs=16))
 	$(call run_tests,external-e2e && !Disruptive,./test/external,$(ARGS),)
 
 .PHONY: test-scale
-test-scale: ginkgo generate ## Run the scale tests.
+test-scale: ginkgo ## Run the scale tests.
 	$(call run_tests,scale && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--scale=$(SCALE))
 
 .PHONY: test-restart
-test-restart: ginkgo generate ## Run the restart tests.
+test-restart: ginkgo ## Run the restart tests.
 	$(call run_tests,restart && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--repeat=$(REPEAT))
 
 .PHONY: test-upgrade
-test-upgrade: ginkgo generate ## Run the upgrade tests.
+test-upgrade: ginkgo ## Run the upgrade tests.
 	$(call run_tests,upgrade && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--repeat=$(REPEAT))
 
 .PHONY: test-scaledown
-test-scaledown: ginkgo generate ## Run the scale down tests.
+test-scaledown: ginkgo ## Run the scale down tests.
 	$(call run_tests,scaledown && aks,./test/e2e,$(ADDITIONAL_GINKGO_FLAGS),--repeat=$(REPEAT))
 
 define run_tests
@@ -184,15 +180,15 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes.
 ##@ Build
 
 .PHONY: build
-build: generate fmt vet ## Build binary.
+build: fmt vet ## Build binary.
 	go build -ldflags "$(LDFLAGS)" -o bin/local-csi-driver cmd/main.go
 
 .PHONY: run
-run: generate fmt vet ## Run the local CSI driver from your host.
+run: fmt vet ## Run the local CSI driver from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
-docker-build: docker-buildx controller-gen ## Build the docker image.
+docker-build: docker-buildx ## Build the docker image.
 	$(call docker-build,Dockerfile,${IMG})
 
 # buildx builder arguments
@@ -244,7 +240,7 @@ docker-lint: hadolint
 	$(HADOLINT) Dockerfile
 
 .PHONY: helm-build
-helm-build: helm generate ## Generate a consolidated Helm chart with CRDs and deployment.
+helm-build: helm ## Generate a consolidated Helm chart with CRDs and deployment.
 	cp charts/latest/Chart.yaml charts/latest/Chart.yaml.bak
 	./hack/fix-helm-chart.sh --chart charts/latest --version $(TAG)
 	$(HELM) package --dependency-update charts/latest -d dist --version $(TAG)
@@ -401,7 +397,6 @@ $(LOCALBIN):
 
 ## Tool Binaries
 KUBECTL ?= kubectl
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 MOCK_GEN ?= $(LOCALBIN)/mockgen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 KIND ?= $(LOCALBIN)/kind
@@ -417,7 +412,6 @@ BICEP ?= $(LOCALBIN)/bicep
 HELM ?= $(LOCALBIN)/helm
 
 ## Tool Versions
-CONTROLLER_TOOLS_VERSION ?= v0.16.5
 GOMOCK_VERSION ?= v0.5.2
 ENVTEST_VERSION ?= release-0.19
 KIND_VERSION ?= v0.25.0
@@ -435,11 +429,6 @@ SUPPORT_BUNDLE_VERSION ?= v0.114.0
 BICEP_VERSION ?= v0.32.4
 HELM_VERSION ?= v3.16.4
 MARKDOWNLINT_CLI_VERSION ?= v0.44.0
-
-.PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
 .PHONY: mockgen
 mockgen: $(MOCK_GEN) ## Installs mockgen locally if necessary.

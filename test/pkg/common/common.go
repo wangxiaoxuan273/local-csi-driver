@@ -81,11 +81,6 @@ func Setup(ctx context.Context, namespace string) {
 		image = defaultImage
 	}
 
-	By("generating files")
-	cmd = exec.CommandContext(ctx, "make", "generate")
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to run make generate")
-
 	isKindClusterCreated = kind.IsClusterCreated()
 
 	if createCluster && isKindClusterCreated {

@@ -46,21 +46,6 @@ type Server struct {
 // Server must implement the csi.ControllerServer interface.
 var _ csi.ControllerServer = &Server{}
 
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=persistentvolumes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;update
-// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims/status,verbs=update;patch
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=csidrivers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=csinodes,verbs=get;list;watch
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments/status,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=storage.k8s.io,resources=csistoragecapacities,verbs=get;list;watch;update;patch;create;delete
-// +kubebuilder:rbac:groups=apps;extensions,resources=replicasets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=apps;extensions,resources=daemonsets,verbs=get;list;watch
-
 func New(volume core.ControllerInterface, caps []*csi.ControllerServiceCapability, modes []*csi.VolumeCapability_AccessMode, mounter mounter.Interface, k8sClient client.Client, nodeID, selectedNodeAnnotation string, selectedInitialNodeParam string, removePvNodeAffinity bool, recorder record.EventRecorder, tp trace.TracerProvider) *Server {
 	return &Server{
 		caps:                     caps,
