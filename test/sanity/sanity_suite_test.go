@@ -26,7 +26,7 @@ const (
 	// deployed.
 	namespace = "kube-system"
 	// controllerDs is the resource name used in kubectl commands for the node.
-	controllerDs = "daemonsets/local-csi-driver-node"
+	controllerDs = "daemonsets/csi-local-node"
 )
 
 var (

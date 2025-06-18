@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "chart.fullname" . }}-node
+  name: {{ .Values.name }}-node
   labels:
-    control-plane: local-csi-driver
+    app: {{ .Values.name }}
   {{- include "chart.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      control-plane: local-csi-driver
+      app: {{ .Values.name }}-node
     {{- include "chart.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        control-plane: local-csi-driver
+        app: {{ .Values.name }}-node
       {{- include "chart.selectorLabels" . | nindent 8 }}
       annotations:
         kubectl.kubernetes.io/default-container: driver
@@ -33,18 +33,18 @@ spec:
                 values:
                 - linux
       containers:
-      - args: {{- toYaml .Values.node.driver.args | nindent 8 }}
+      - args: {{- toYaml .Values.daemonset.driver.args | nindent 8 }}
         {{- if or .Values.webhook.ephemeral.enabled .Values.webhook.hyperconverged.enabled }}
-        - --webhook-service-name={{ include "chart.fullname" . }}-webhook-service
+        - --webhook-service-name={{ .Values.name }}-webhook-service
         {{- end }}
         {{- if .Values.webhook.ephemeral.enabled }}
-        - --ephemeral-webhook-config={{ include "chart.fullname" . }}-ephemeral-webhook
+        - --ephemeral-webhook-config={{ .Values.name }}-ephemeral-webhook
         {{- end }}
         {{- if .Values.webhook.hyperconverged.enabled }}
-        - --hyperconverged-webhook-config={{ include "chart.fullname" . }}-hyperconverged-webhook
+        - --hyperconverged-webhook-config={{ .Values.name }}-hyperconverged-webhook
         {{- end }}
         {{- if or .Values.webhook.ephemeral.enabled .Values.webhook.hyperconverged.enabled }}
-        - --certificate-secret-name={{ include "chart.fullname" . }}-webhook-server-cert
+        - --certificate-secret-name={{ .Values.name }}-webhook-cert
         {{- end }}
         command:
         - /local-csi-driver
@@ -63,8 +63,12 @@ spec:
               fieldPath: spec.nodeName
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.node.driver.image.repository }}:{{ .Values.node.driver.image.tag | default .Chart.Version }}
-        imagePullPolicy: {{ .Values.node.driver.imagePullPolicy }}
+        {{- if hasPrefix "/" .Values.image.driver.repository }}
+        image: "{{ .Values.image.baseRepo }}{{ .Values.image.driver.repository }}:{{ .Values.image.driver.tag | default .Chart.AppVersion}}"
+        {{- else }}
+        image: "{{ .Values.image.driver.repository }}:{{ .Values.image.driver.tag | default .Chart.AppVersion}}"
+        {{- end }}
+        imagePullPolicy: {{ .Values.image.driver.pullPolicy }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -88,8 +92,8 @@ spec:
             port: driver
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources: {{- toYaml .Values.node.driver.resources | nindent 10 }}
-        securityContext: {{- toYaml .Values.node.driver.containerSecurityContext | nindent
+        resources: {{- toYaml .Values.daemonset.driver.resources | nindent 10 }}
+        securityContext: {{- toYaml .Values.daemonset.driver.containerSecurityContext | nindent
           10 }}
         terminationMessagePath: /tmp/termination-log
         terminationMessagePolicy: FallbackToLogsOnError
@@ -109,7 +113,7 @@ spec:
         - mountPath: /var/lib/kubelet/
           mountPropagation: Bidirectional
           name: mountpoint-dir
-      - args: {{- toYaml .Values.node.csiProvisioner.args | nindent 8 }}
+      - args: {{- toYaml .Values.daemonset.csiProvisioner.args | nindent 8 }}
         env:
         - name: NAMESPACE
           valueFrom:
@@ -125,9 +129,12 @@ spec:
               fieldPath: spec.nodeName
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.node.csiProvisioner.image.repository }}:{{ .Values.node.csiProvisioner.image.tag
-          | default .Chart.AppVersion }}
-        imagePullPolicy: {{ .Values.node.csiProvisioner.imagePullPolicy }}
+        {{- if hasPrefix "/" .Values.image.csiProvisioner.repository }}
+        image: "{{ .Values.image.baseRepo }}{{ .Values.image.csiProvisioner.repository }}:{{ .Values.image.csiProvisioner.tag }}"
+        {{- else }}
+        image: "{{ .Values.image.csiProvisioner.repository }}:{{ .Values.image.csiProvisioner.tag }}"
+        {{- end }}
+        imagePullPolicy: {{ .Values.image.csiProvisioner.pullPolicy }}
         livenessProbe:
           failureThreshold: 1
           initialDelaySeconds: 10
@@ -140,39 +147,45 @@ spec:
         - containerPort: 8090
           name: provisioner
           protocol: TCP
-        resources: {{- toYaml .Values.node.csiProvisioner.resources | nindent 10 }}
+        resources: {{- toYaml .Values.daemonset.csiProvisioner.resources | nindent 10 }}
         volumeMounts:
         - mountPath: /csi
           name: csi-socket-dir
-      - args: {{- toYaml .Values.node.lvmResizer.args | nindent 8 }}
+      - args: {{- toYaml .Values.daemonset.lvmResizer.args | nindent 8 }}
         env:
         - name: ADDRESS
-          value: {{ quote .Values.node.lvmResizer.env.address }}
+          value: {{ quote .Values.daemonset.lvmResizer.env.address }}
         - name: POD_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.node.lvmResizer.image.repository }}:{{ .Values.node.lvmResizer.image.tag
-          | default .Chart.AppVersion }}
-        imagePullPolicy: {{ .Values.node.lvmResizer.imagePullPolicy }}
-        name: lvm-resizer
+        {{- if hasPrefix "/" .Values.image.csiResizer.repository }}
+        image: "{{ .Values.image.baseRepo }}{{ .Values.image.csiResizer.repository }}:{{ .Values.image.csiResizer.tag }}"
+        {{- else }}
+        image: "{{ .Values.image.csiResizer.repository }}:{{ .Values.image.csiResizer.tag }}"
+        {{- end }}
+        imagePullPolicy: {{ .Values.image.csiResizer.pullPolicy }}
+        name: csi-resizer
         ports:
         - containerPort: 29756
           name: resizer
           protocol: TCP
-        resources: {{- toYaml .Values.node.lvmResizer.resources | nindent 10 }}
+        resources: {{- toYaml .Values.daemonset.lvmResizer.resources | nindent 10 }}
         volumeMounts:
         - mountPath: /csi
           name: csi-socket-dir
-      - args: {{- toYaml .Values.node.csiRegistrar.args | nindent 8 }}
+      - args: {{- toYaml .Values.daemonset.csiRegistrar.args | nindent 8 }}
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.node.csiRegistrar.image.repository }}:{{ .Values.node.csiRegistrar.image.tag
-          | default .Chart.AppVersion }}
-        imagePullPolicy: {{ .Values.node.csiRegistrar.imagePullPolicy }}
+        {{- if hasPrefix "/" .Values.image.nodeDriverRegistrar.repository }}
+        image: "{{ .Values.image.baseRepo }}{{ .Values.image.nodeDriverRegistrar.repository }}:{{ .Values.image.nodeDriverRegistrar.tag }}"
+        {{- else }}
+        image: "{{ .Values.image.nodeDriverRegistrar.repository }}:{{ .Values.image.nodeDriverRegistrar.tag }}"
+        {{- end }}
+        imagePullPolicy: {{ .Values.image.nodeDriverRegistrar.pullPolicy }}
         livenessProbe:
           failureThreshold: 1
           httpGet:
@@ -186,17 +199,17 @@ spec:
         - containerPort: 8091
           name: registrar
           protocol: TCP
-        resources: {{- toYaml .Values.node.csiRegistrar.resources | nindent 10 }}
+        resources: {{- toYaml .Values.daemonset.csiRegistrar.resources | nindent 10 }}
         volumeMounts:
         - mountPath: /csi
           name: csi-socket-dir
         - mountPath: /registration
           name: registration-dir
       hostPID: true
-      nodeSelector: {{- toYaml .Values.node.nodeSelector | nindent 8 }}
+      nodeSelector: {{- toYaml .Values.daemonset.nodeSelector | nindent 8 }}
       priorityClassName: system-node-critical
-      securityContext: {{- toYaml .Values.node.podSecurityContext | nindent 8 }}
-      serviceAccountName: {{ include "chart.fullname" . }}-node
+      securityContext: {{- toYaml .Values.daemonset.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ .Values.name }}-node
       terminationGracePeriodSeconds: 60
       tolerations:
       - effect: NoSchedule
@@ -207,7 +220,7 @@ spec:
       {{- if or .Values.webhook.ephemeral.enabled .Values.webhook.hyperconverged.enabled }}
       - name: cert
         secret:
-          secretName: {{ include "chart.fullname" . }}-webhook-server-cert
+          secretName: {{ .Values.name }}-webhook-cert
       {{- end }}
       - hostPath:
           path: /dev

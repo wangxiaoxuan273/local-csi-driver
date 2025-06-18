@@ -31,8 +31,8 @@ var (
 	// supportBundleDir is the directory where support bundles are written.
 	supportBundleDir = flag.String("support-bundle-dir", "support-bundles", "Path to write support-bundles")
 
-	// releaseName is the release name for the test.
-	releaseName = flag.String("release-name", "local-csi-driver", "Release name for the test")
+	// helmPrefix is the helm prefix used by helm when creating k8s resources.
+	helmPrefix = flag.String("helm-prefix", "csi-local", "Prefix used by helm for k8s resources")
 )
 
 func TestMain(m *testing.M) {
