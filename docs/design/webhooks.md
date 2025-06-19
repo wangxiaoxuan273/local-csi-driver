@@ -3,8 +3,7 @@
 ## Design
 
 local-csi-driver defines two webhooks to enhance user experience and reduce
-potential user
-errors.
+potential user errors.
 
 1. **Validation Webhook**: This webhook validates PersistentVolumeClaim (PVC)
 resources to ensure that only generic ephemeral storage is utilized, unless the
@@ -43,8 +42,8 @@ reside.
 To provide flexibility, users can opt to create persistent volumes by including
 the annotation `local.csi.azure.com/accept-ephemeral-storage: "true"` in their
 PersistentVolumeClaims (PVCs). This annotation signifies that the user
-acknowledges the potential risks of data loss associated with local storage and accepts
-the consequences of its use.
+acknowledges the potential risks of data loss associated with local storage and
+accepts the consequences of its use.
 
 ### Example
 
@@ -75,15 +74,15 @@ setting node affinity on the PersistentVolume (PV) or through the webhook.
 
 Hyperconvergence of PVC and the workload can be achieved by setting node
 affinity on the PersistentVolume (PV) to a specific node. This ensures that the
-PV can only bind to one node where it is provisioned,
-and the workload Pods will be scheduled on the
-same node as the PV. This approach is straightforward and works well for most
-use cases. However, it has a significant limitation: the node affinity of the PV
-is immutable. This means that if the node is deleted, the PV resources become
-unusable and to unblock the workloads, manual cleanup of PV resources is
-required. This is why the mutation webhook is provided as an alternative
-approach for use cases where cluster administrators want to avoid manual
-cleanup.
+PV can only bind to one node where it is provisioned, and the workload Pods will
+be scheduled on the same node as the PV.
+
+This approach is straightforward and works well for most use cases. However, it
+has a significant limitation: the node affinity of the PV is immutable. This
+means that if the node is deleted, the PV resources become unusable and to
+unblock the workloads, manual cleanup of PV resources is required. This is why
+the mutation webhook is provided as an alternative approach for use cases where
+cluster administrators want to avoid manual cleanup.
 
 ### Example of PV with Node Affinity
 
