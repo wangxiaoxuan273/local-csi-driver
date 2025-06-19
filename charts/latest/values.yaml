@@ -84,7 +84,7 @@ observability:
     health:
       port: 8081
     trace:
-      endpoint: jaeger-collector.observability.svc.cluster.local:4317
+      endpoint: ""
       sampleRate: "1000000"
   csiProvisioner:
     log:

@@ -119,7 +119,7 @@ func main() {
 	flag.IntVar(&apiBurst, "kube-api-burst", 30,
 		"Burst to use while communicating with the kubernetes apiserver. Defaults to 30.")
 	flag.StringVar(&traceAddr, "trace-address", "",
-		"The address to send traces to. localhost:4317 if not set.")
+		"The address to send traces to. Disables tracing if not set.")
 	flag.IntVar(&traceSampleRate, "trace-sample-rate", 0,
 		"Sample rate per million. 0 to disable tracing, 1000000 to trace everything.")
 	flag.StringVar(&traceServiceID, "trace-service-id", "",
