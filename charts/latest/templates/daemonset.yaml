@@ -32,8 +32,25 @@ spec:
                 operator: In
                 values:
                 - linux
+
       containers:
-      - args: {{- toYaml .Values.daemonset.driver.args | nindent 8 }}
+
+      - name: driver
+        args:
+        - --node-name=$(NODE_NAME)
+        - --pod-name=$(POD_NAME)
+        - --namespace=$(POD_NAMESPACE)
+        - --csi-bind-address=unix:///csi/csi.sock
+        - --worker-threads={{ .Values.scalability.driver.workerThreads }}
+        - --kube-api-qps={{ .Values.scalability.driver.kubeApi.qps }}
+        - --kube-api-burst={{ .Values.scalability.driver.kubeApi.burst }}
+        - --metrics-bind-address=:{{ .Values.observability.driver.metrics.port }}
+        - --metrics-secure=false
+        - --health-probe-bind-address=:{{ .Values.observability.driver.health.port }}
+        - --trace-address={{ .Values.observability.driver.trace.endpoint }}
+        - --trace-sample-rate={{ .Values.observability.driver.trace.sampleRate }}
+        - --trace-service-id=$(POD_NAME)
+        - --v={{ .Values.observability.driver.log.level }}
         {{- if or .Values.webhook.ephemeral.enabled .Values.webhook.hyperconverged.enabled }}
         - --webhook-service-name={{ .Values.name }}-webhook-service
         {{- end }}
@@ -72,29 +89,32 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: driver
+            port: health
           initialDelaySeconds: 15
           periodSeconds: 20
-        name: driver
         ports:
         - containerPort: 9443
           name: webhook-server
           protocol: TCP
-        - containerPort: 8080
+        - containerPort: {{ .Values.observability.driver.metrics.port }}
           name: metrics
           protocol: TCP
-        - containerPort: 8081
-          name: driver
+        - containerPort: {{ .Values.observability.driver.health.port }}
+          name: health
           protocol: TCP
         readinessProbe:
           httpGet:
             path: /readyz
-            port: driver
+            port: health
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources: {{- toYaml .Values.daemonset.driver.resources | nindent 10 }}
-        securityContext: {{- toYaml .Values.daemonset.driver.containerSecurityContext | nindent
-          10 }}
+        resources: {{- toYaml .Values.resources.driver | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+          privileged: true
         terminationMessagePath: /tmp/termination-log
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
@@ -113,7 +133,24 @@ spec:
         - mountPath: /var/lib/kubelet/
           mountPropagation: Bidirectional
           name: mountpoint-dir
-      - args: {{- toYaml .Values.daemonset.csiProvisioner.args | nindent 8 }}
+
+      - name: csi-provisioner
+        args:
+        - --csi-address=/csi/csi.sock
+        - --node-deployment
+        - --http-endpoint=:{{ .Values.observability.csiProvisioner.http.port }}
+        - --retry-interval-start=1s
+        - --retry-interval-max=30s
+        - --worker-threads={{ .Values.scalability.csiProvisioner.workerThreads }}
+        - --kube-api-qps={{ .Values.scalability.csiProvisioner.kubeApi.qps }}
+        - --kube-api-burst={{ .Values.scalability.csiProvisioner.kubeApi.burst }}
+        - --extra-create-metadata
+        - --feature-gates=Topology=true
+        - --strict-topology=true
+        - --enable-capacity
+        - --capacity-ownerref-level=1
+        - --capacity-poll-interval=15s
+        - --v={{ .Values.observability.csiProvisioner.log.level }}
         env:
         - name: NAMESPACE
           valueFrom:
@@ -142,19 +179,23 @@ spec:
           tcpSocket:
             port: provisioner
           timeoutSeconds: 10
-        name: csi-provisioner
         ports:
-        - containerPort: 8090
+        - containerPort: {{ .Values.observability.csiProvisioner.http.port }}
           name: provisioner
           protocol: TCP
-        resources: {{- toYaml .Values.daemonset.csiProvisioner.resources | nindent 10 }}
+        resources: {{- toYaml .Values.resources.csiProvisioner | nindent 10 }}
         volumeMounts:
         - mountPath: /csi
           name: csi-socket-dir
-      - args: {{- toYaml .Values.daemonset.lvmResizer.args | nindent 8 }}
+
+      - name: csi-resizer
+        args:
+        - --csi-address=/csi/csi.sock
+        - --timeout=240s
+        - --handle-volume-inuse-error=true
+        - --http-endpoint=:{{ .Values.observability.csiResizer.http.port }}
+        - --v={{ .Values.observability.csiResizer.log.level }}
         env:
-        - name: ADDRESS
-          value: {{ quote .Values.daemonset.lvmResizer.env.address }}
         - name: POD_NAMESPACE
           valueFrom:
             fieldRef:
@@ -167,16 +208,21 @@ spec:
         image: "{{ .Values.image.csiResizer.repository }}:{{ .Values.image.csiResizer.tag }}"
         {{- end }}
         imagePullPolicy: {{ .Values.image.csiResizer.pullPolicy }}
-        name: csi-resizer
         ports:
-        - containerPort: 29756
+        - containerPort: {{ .Values.observability.csiResizer.http.port }}
           name: resizer
           protocol: TCP
-        resources: {{- toYaml .Values.daemonset.lvmResizer.resources | nindent 10 }}
+        resources: {{- toYaml .Values.resources.csiResizer | nindent 10 }}
         volumeMounts:
         - mountPath: /csi
           name: csi-socket-dir
-      - args: {{- toYaml .Values.daemonset.csiRegistrar.args | nindent 8 }}
+
+      - name: csi-registrar
+        args:
+        - --csi-address=/csi/csi.sock
+        - --kubelet-registration-path=/var/lib/kubelet/plugins/local.csi.azure.com/csi.sock
+        - --http-endpoint=:{{ .Values.observability.nodeDriverRegistrar.http.port }}
+        - --v={{ .Values.observability.nodeDriverRegistrar.log.level }}
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
@@ -194,21 +240,23 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 20
           timeoutSeconds: 5
-        name: csi-registrar
         ports:
-        - containerPort: 8091
+        - containerPort: {{ .Values.observability.nodeDriverRegistrar.http.port }}
           name: registrar
           protocol: TCP
-        resources: {{- toYaml .Values.daemonset.csiRegistrar.resources | nindent 10 }}
+        resources: {{- toYaml .Values.resources.nodeDriverRegistrar | nindent 10 }}
         volumeMounts:
         - mountPath: /csi
           name: csi-socket-dir
         - mountPath: /registration
           name: registration-dir
+
       hostPID: true
       nodeSelector: {{- toYaml .Values.daemonset.nodeSelector | nindent 8 }}
       priorityClassName: system-node-critical
-      securityContext: {{- toYaml .Values.daemonset.podSecurityContext | nindent 8 }}
+      securityContext:
+        seccompProfile:
+          type: Unconfined
       serviceAccountName: {{ .Values.name }}-node
       terminationGracePeriodSeconds: 60
       tolerations:
@@ -231,7 +279,7 @@ spec:
           type: DirectoryOrCreate
         name: k8s-cfg
       - hostPath:
-          path: /var/lib/kubelet/plugins/cns.io/
+          path: /var/lib/kubelet/plugins/local.csi.azure.com/
           type: DirectoryOrCreate
         name: csi-socket-dir
       - hostPath:

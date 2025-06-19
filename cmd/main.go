@@ -87,9 +87,9 @@ func main() {
 	var tlsOpts []func(*tls.Config)
 	var printVersionAndExit bool
 	var eventRecorderEnabled bool
-	flag.StringVar(&nodeName, "nodeName", "",
+	flag.StringVar(&nodeName, "node-name", "",
 		"The name of the node this agent is running on.")
-	flag.StringVar(&podName, "podName", "",
+	flag.StringVar(&podName, "pod-name", "",
 		"The name of the pod this agent is running on.")
 	flag.StringVar(&namespace, "namespace", "default",
 		"The namespace to use for creating objects.")
