@@ -6,13 +6,14 @@ REGISTRY ?= docker.io
 
 # REPO_BASE is used in the Dockerfile and will be set to empty when run in the
 # pipelines. Set default for empty string, not just undefined.
-REPO_BASE := $(if $(REPO_BASE),$(REPO_BASE),local-csi-driver)
-REPO ?= $(REPO_BASE)/driver
+REPO_BASE := $(if $(REPO_BASE),$(REPO_BASE),acstor)
+REPO ?= $(REPO_BASE)/local-csi-driver
 
 COMMIT_HASH ?= $(shell git describe --always --dirty)
 TAG ?= 0.0.0-$(COMMIT_HASH)
 IMG ?= $(REGISTRY)/$(REPO):$(TAG)
-CHART_IMG ?= $(REGISTRY)/$(REPO_BASE)/local-csi-driver
+CHART_REPO ?= $(REGISTRY)/$(REPO_BASE)/charts
+CHART_IMG ?= $(CHART_REPO)/local-csi-driver
 
 SKIP_CREATE_CLUSTER ?= false
 ADDITIONAL_GINKGO_FLAGS ?=
@@ -260,7 +261,7 @@ helm-login: helm ## Log in to the ACR Helm registry.
 
 .PHONY: helm-push
 helm-push: helm helm-build ## Push the Helm chart to the Helm repository.
-	$(HELM) push dist/local-csi-driver-$(TAG).tgz oci://$(REGISTRY)/$(REPO_BASE)
+	$(HELM) push dist/local-csi-driver-$(TAG).tgz oci://$(CHART_REPO)
 
 ##@ Deployment
 
