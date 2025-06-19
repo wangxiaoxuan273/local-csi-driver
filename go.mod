@@ -29,7 +29,7 @@ require (
 	k8s.io/component-base v0.33.1
 	k8s.io/component-helpers v0.33.1
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubernetes v1.33.1
+	k8s.io/kubernetes v1.33.2
 	k8s.io/mount-utils v0.33.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	pault.ag/go/loopback v0.1.4
