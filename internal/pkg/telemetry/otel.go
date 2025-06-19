@@ -53,14 +53,19 @@ func New(ctx context.Context, opts ...Option) (*OtelProviders, error) {
 // InitTracing initializes the OpenTelemetry tracing provider. It should be called
 // before traces are used.
 func InitTracing(ctx context.Context, cfg config) (tracing.TracerProvider, error) {
-	otlpCfg := &tracingv1.TracingConfiguration{
-		Endpoint:               &cfg.endpoint,
-		SamplingRatePerMillion: &cfg.traceSampleRate,
+	var otlpCfg *tracingv1.TracingConfiguration
+	var resOpts []resource.Option
+	if cfg.endpoint != "" && cfg.traceSampleRate > 0 {
+		otlpCfg = &tracingv1.TracingConfiguration{
+			Endpoint:               &cfg.endpoint,
+			SamplingRatePerMillion: &cfg.traceSampleRate,
+		}
+		resOpts = NewResourceOptions(cfg)
 	}
-	resOpts := NewResourceOptions(cfg)
 
 	// Use the trace provider from component-base so it can also be used with
-	// Kubernetes components that support tracing.
+	// Kubernetes components that support tracing. nil otlpCfg means that
+	// the tracing provider will be a noop provider.
 	tp, err := tracing.NewProvider(ctx, otlpCfg, []otlptracegrpc.Option{}, resOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tracer provider: %w", err)
