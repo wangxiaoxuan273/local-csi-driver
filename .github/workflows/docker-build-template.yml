@@ -74,6 +74,7 @@ jobs:
       - name: Set image tags
         id: set-tags
         run: |
+          set -eou pipefail
           tags=()
           while IFS= read -r tag; do
             if [[ -z "$tag" ]]; then
@@ -82,7 +83,7 @@ jobs:
             tags+=("${{ inputs.registry }}/${{ inputs.repo_base }}/${{ matrix.image.name }}:${tag}")
           done <<< "${{ inputs.tags }}"
 
-          echo "tags=${tags[*]}" >> "$GITHUB_OUTPUT"
+          echo "tags=$(IFS=,; echo "${tags[*]}")" >> "$GITHUB_OUTPUT"
 
       - name: Docker build and push
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
