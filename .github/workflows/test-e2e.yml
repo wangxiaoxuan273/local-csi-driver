@@ -7,8 +7,14 @@ concurrency:
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
     branches: [main, release-**]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
 
 permissions:
   contents: read
@@ -27,7 +33,8 @@ jobs:
   vars:
     runs-on: ubuntu-latest
     outputs:
-      TAG: ${{ steps.set-tag.outputs.tag }}
+      TAG: ${{ steps.set-tag.outputs.TAG }}
+      LATEST_TAG: ${{ steps.set-tag.outputs.LATEST_TAG }}
     steps:
       - name: Check out the code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -42,6 +49,13 @@ jobs:
           # Create tag in format MAJOR.MINOR.PATCH-REF
           TAG="${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-${SHORT_SHA}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            LATEST_TAG="${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest"
+          else
+            LATEST_TAG=""
+          fi
+          echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
   build-docker:
     needs: vars
     uses: ./.github/workflows/docker-build-template.yml
@@ -51,7 +65,7 @@ jobs:
       version: ${{ needs.vars.outputs.TAG }}
       tags: |
         ${{ needs.vars.outputs.TAG }}
-        ${{ github.ref == 'refs/heads/main' && '${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest' || '' }}
+        ${{ needs.vars.outputs.LATEST_TAG }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -65,7 +79,7 @@ jobs:
       repo_base: "acstor"
       tags: |
         ${{ needs.vars.outputs.TAG }}
-        ${{ github.ref == 'refs/heads/main' && '${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}-latest' || '' }}
+        ${{ needs.vars.outputs.LATEST_TAG }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
