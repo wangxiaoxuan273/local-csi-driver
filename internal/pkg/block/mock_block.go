@@ -58,3 +58,33 @@ func (mr *MockMockRecorder) GetDevices(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevices", reflect.TypeOf((*Mock)(nil).GetDevices), ctx)
 }
+
+// IsBlockDevice mocks base method.
+func (m *Mock) IsBlockDevice(path string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsBlockDevice", path)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsBlockDevice indicates an expected call of IsBlockDevice.
+func (mr *MockMockRecorder) IsBlockDevice(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBlockDevice", reflect.TypeOf((*Mock)(nil).IsBlockDevice), path)
+}
+
+// IsFormatted mocks base method.
+func (m *Mock) IsFormatted(device string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsFormatted", device)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsFormatted indicates an expected call of IsFormatted.
+func (mr *MockMockRecorder) IsFormatted(device any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsFormatted", reflect.TypeOf((*Mock)(nil).IsFormatted), device)
+}
