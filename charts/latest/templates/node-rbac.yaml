@@ -3,7 +3,11 @@ kind: ClusterRole
 metadata:
   name: {{ .Values.name }}-node-role
   labels:
+  {{- if gt (len .Values.rbac.clusterRole.labels) 0 }}
+  {{- toYaml .Values.rbac.clusterRole.labels | nindent 4 }}
+  {{- else }}
   {{- include "chart.labels" . | nindent 4 }}
+  {{- end }}
 rules:
 - apiGroups:
   - ""
@@ -124,7 +128,11 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ .Values.name }}-node-binding
   labels:
+  {{- if gt (len .Values.rbac.clusterRoleBinding.labels) 0 }}
+  {{- toYaml .Values.rbac.clusterRoleBinding.labels | nindent 4 }}
+  {{- else }}
   {{- include "chart.labels" . | nindent 4 }}
+  {{- end }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

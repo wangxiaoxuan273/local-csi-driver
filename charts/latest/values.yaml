@@ -47,6 +47,13 @@ serviceAccount:
   labels: {}
   annotations: {}
 
+# RBAC configuration.
+rbac:
+  clusterRole:
+    labels: {}
+  clusterRoleBinding:
+    labels: {}
+
 cleanup:
   # Cleanup volume groups and physical volumes on pod termination if logical volume are not in use.
   enabled: true
