@@ -16,6 +16,8 @@ spec:
     {{- if .Values.selectorLabelsOverride }}
     {{- toYaml .Values.selectorLabelsOverride | nindent 6 }}
     {{- else }}
+      app: {{ .Values.name }}-node
+      app.kubernetes.io/component: csi-local-node
     {{- include "chart.selectorLabels" . | nindent 6 }}
     {{- end }}
   template:
