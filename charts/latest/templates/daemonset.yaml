@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ .Values.name }}-node
-  namespace: {{ .Values.daemonset.namespace | default .Release.Namespace }}
   labels:
   {{- if gt (len .Values.daemonset.labels) 0 }}
   {{- toYaml .Values.daemonset.labels | nindent 4 }}

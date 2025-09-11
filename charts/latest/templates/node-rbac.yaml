@@ -140,4 +140,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.name }}-node
-  namespace: {{ .Values.rbac.clusterRoleBinding.serviceAccountNamespace | default (.Values.serviceAccount.namespace | default .Release.Namespace) }}
+  namespace: '{{ .Release.Namespace }}'

@@ -26,9 +26,6 @@ image:
 
 # DaemonSet configuration.
 daemonset:
-  namespace: ""
-  labels: {}
-
   # Node selector for the DaemonSet. If empty, all nodes are selected. This can
   # be used to install the driver on a subset of nodes with local NVMe storage.
   nodeSelector: {}
@@ -44,19 +41,6 @@ daemonset:
   serviceAccount:
     # Annotations for the service account. If empty, no annotations are applied.
     annotations: {}
-
-serviceAccount:
-  namespace: ""
-  labels: {}
-  annotations: {}
-
-# RBAC configuration.
-rbac:
-  clusterRole:
-    labels: {}
-  clusterRoleBinding:
-    labels: {}
-    serviceAccountNamespace: ""
 
 cleanup:
   # Cleanup volume groups and physical volumes on pod termination if logical volume are not in use.
