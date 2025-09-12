@@ -3,33 +3,21 @@ kind: DaemonSet
 metadata:
   name: {{ .Values.name }}-node
   labels:
-  {{- if .Values.labelsOverride }}
-  {{- toYaml .Values.labelsOverride | nindent 4 }}
-  {{- else }}
     app: {{ .Values.name }}
     app.kubernetes.io/component: csi-local-node
   {{- include "chart.labels" . | nindent 4 }}
-  {{- end }}
 spec:
   selector:
     matchLabels:
-    {{- if .Values.selectorLabelsOverride }}
-    {{- toYaml .Values.selectorLabelsOverride | nindent 6 }}
-    {{- else }}
       app: {{ .Values.name }}-node
       app.kubernetes.io/component: csi-local-node
     {{- include "chart.selectorLabels" . | nindent 6 }}
-    {{- end }}
   template:
     metadata:
       labels:
-      {{- if .Values.selectorLabelsOverride }}
-      {{- toYaml .Values.selectorLabelsOverride | nindent 8 }}
-      {{- else }}
         app: {{ .Values.name }}-node
         app.kubernetes.io/component: csi-local-node
       {{- include "chart.selectorLabels" . | nindent 8 }}
-      {{- end }}
       annotations:
         kubectl.kubernetes.io/default-container: driver
     spec:
