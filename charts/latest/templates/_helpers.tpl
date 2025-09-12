@@ -34,23 +34,27 @@ Create chart name and version as used by the chart label.
 Common labels
 */}}
 {{- define "chart.labels" -}}
+{{ include "chart.selectorLabels" . }}
 {{- if .Values.labelsOverride }}
 {{ toYaml .Values.labelsOverride | trim | nindent 0 }}
-{{- end }}
+{{- else }}
+helm.sh/chart: {{ include "chart.chart" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
 {{- end }}
 
 {{/*
 Selector labels
 */}}
 {{- define "chart.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "chart.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Values.selectorLabelsOverride }}
 {{ toYaml .Values.selectorLabelsOverride | trim | nindent 0 }}
+{{- else }}
+app.kubernetes.io/name: {{ include "chart.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
